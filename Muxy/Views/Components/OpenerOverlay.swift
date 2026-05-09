@@ -12,6 +12,8 @@ struct OpenerOverlay: View {
     @State private var enabledCategories: Set<OpenerCategory> = OpenerPreferences.enabledCategories
     @State private var highlightedIndex: Int? = 0
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private var filteredItems: [OpenerItem] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let scoped = items.filter { enabledCategories.contains($0.category) }
@@ -36,7 +38,7 @@ struct OpenerOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            backdrop
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
 
@@ -48,8 +50,7 @@ struct OpenerOverlay: View {
                 resultsList
             }
             .frame(width: UIMetrics.scaled(560), height: UIMetrics.scaled(460))
-            .background(MuxyTheme.bg)
-            .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
+            .background(panelBackground)
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))
@@ -68,6 +69,26 @@ struct OpenerOverlay: View {
         }
         .onChange(of: items.count) {
             highlightedIndex = displayList.isEmpty ? nil : 0
+        }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if reduceTransparency {
+            Color.black.opacity(0.3)
+        } else {
+            Color.black.opacity(0.001).background(.ultraThinMaterial.opacity(0.6))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(MuxyTheme.bg)
+        } else {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(.regularMaterial)
         }
     }
 

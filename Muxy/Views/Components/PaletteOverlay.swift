@@ -20,9 +20,11 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            backdrop
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
 
@@ -32,8 +34,7 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
                 resultsList
             }
             .frame(width: UIMetrics.scaled(500), height: UIMetrics.scaled(380))
-            .background(MuxyTheme.bg)
-            .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
+            .background(panelBackground)
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))
@@ -45,6 +46,26 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
         }
         .onDisappear {
             searchTask?.cancel()
+        }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if reduceTransparency {
+            Color.black.opacity(0.3)
+        } else {
+            Color.black.opacity(0.001).background(.ultraThinMaterial.opacity(0.6))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(MuxyTheme.bg)
+        } else {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(.regularMaterial)
         }
     }
 
