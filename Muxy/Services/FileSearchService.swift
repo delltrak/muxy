@@ -12,6 +12,9 @@ enum FileSearchService {
     private static let candidatePoolLimit = 500
     private static let initialMaxDepth = 4
     private static let initialCandidateLimit = 150
+    private static let queryDebounceMilliseconds: UInt64 = 150
+
+    private static let inFlight = InFlightProcess()
 
     private static let prunedDirectoryNames: [String] = [
         ".git", "node_modules", ".build", "build", "DerivedData",
@@ -24,6 +27,7 @@ enum FileSearchService {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
 
         if trimmed.isEmpty {
+            inFlight.cancelCurrent()
             let candidates = await runFind(
                 arguments: initialArguments(projectPath: projectPath),
                 projectPath: projectPath,
@@ -32,6 +36,10 @@ enum FileSearchService {
             return rankInitialCandidates(candidates)
         }
 
+        try? await Task.sleep(nanoseconds: queryDebounceMilliseconds * 1_000_000)
+        if Task.isCancelled { return [] }
+
+        inFlight.cancelCurrent()
         let candidates = await runFind(
             arguments: queryArguments(query: trimmed, projectPath: projectPath),
             projectPath: projectPath,
@@ -68,16 +76,18 @@ enum FileSearchService {
                 }
             }
 
-            process.terminationHandler = { _ in
+            process.terminationHandler = { finished in
                 handle.readabilityHandler = nil
                 if let remaining = try? handle.readToEnd(), let chunk = String(data: remaining, encoding: .utf8) {
                     _ = resultsBox.append(chunk: chunk, projectPath: projectPath, limit: limit)
                 }
+                inFlight.clear(if: finished)
                 continuation.resume(returning: resultsBox.take())
             }
 
             do {
                 try process.run()
+                inFlight.set(process)
             } catch {
                 handle.readabilityHandler = nil
                 continuation.resume(returning: [])
