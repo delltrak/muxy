@@ -11,10 +11,28 @@ struct AppearanceSettingsView: View {
     @AppStorage(SidebarCollapsedStyle.storageKey) private var sidebarCollapsedStyle = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var sidebarExpandedStyle = SidebarExpandedStyle.defaultValue.rawValue
 
+    @Environment(\.settingsSearchQuery) private var searchQuery
+
     var body: some View {
-        SettingsContainer {
-            SettingsSection("Interface") {
-                SettingsRow("Size") {
+        Form {
+            interfaceSection
+            terminalSection
+            sidebarSection
+            sourceControlSection
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .task { refreshThemeNames() }
+        .onReceive(NotificationCenter.default.publisher(for: .themeDidChange)) { _ in
+            refreshThemeNames()
+        }
+    }
+
+    @ViewBuilder
+    private var interfaceSection: some View {
+        if isSectionVisible(["Size"], extra: ["scale", "ui"]) {
+            Section("Interface") {
+                SettingsSearchableRow("Size", keywords: ["scale"]) {
                     Picker("", selection: $uiScale.preset) {
                         ForEach(UIScale.Preset.allCases) { preset in
                             Text(preset.title).tag(preset)
@@ -22,19 +40,24 @@ struct AppearanceSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: SettingsMetrics.controlWidth)
+                    .fixedSize()
                 }
             }
+        }
+    }
 
-            SettingsSection("Terminal") {
-                SettingsRow("Light Theme") {
+    @ViewBuilder
+    private var terminalSection: some View {
+        if isSectionVisible(["Light Theme", "Dark Theme"]) {
+            Section("Terminal") {
+                SettingsSearchableRow("Light Theme") {
                     themeButton(
                         title: currentLightTheme ?? "Default",
                         isPresented: $showLightThemePicker,
                         mode: .light
                     )
                 }
-                SettingsRow("Dark Theme") {
+                SettingsSearchableRow("Dark Theme") {
                     themeButton(
                         title: currentDarkTheme ?? "Default",
                         isPresented: $showDarkThemePicker,
@@ -42,41 +65,42 @@ struct AppearanceSettingsView: View {
                     )
                 }
             }
+        }
+    }
 
-            SettingsSection("Sidebar") {
-                SettingsRow("Collapsed Style") {
-                    HStack {
-                        Spacer()
-                        Picker("", selection: $sidebarCollapsedStyle) {
-                            ForEach(SidebarCollapsedStyle.allCases) { style in
-                                Text(style.title).tag(style.rawValue)
-                            }
+    @ViewBuilder
+    private var sidebarSection: some View {
+        if isSectionVisible(["Collapsed Style", "Expanded Style"]) {
+            Section("Sidebar") {
+                SettingsSearchableRow("Collapsed Style") {
+                    Picker("", selection: $sidebarCollapsedStyle) {
+                        ForEach(SidebarCollapsedStyle.allCases) { style in
+                            Text(style.title).tag(style.rawValue)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .fixedSize()
                     }
-                    .frame(width: SettingsMetrics.controlWidth)
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
-
-                SettingsRow("Expanded Style") {
-                    HStack {
-                        Spacer()
-                        Picker("", selection: $sidebarExpandedStyle) {
-                            ForEach(SidebarExpandedStyle.allCases) { style in
-                                Text(style.title).tag(style.rawValue)
-                            }
+                SettingsSearchableRow("Expanded Style") {
+                    Picker("", selection: $sidebarExpandedStyle) {
+                        ForEach(SidebarExpandedStyle.allCases) { style in
+                            Text(style.title).tag(style.rawValue)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .fixedSize()
                     }
-                    .frame(width: SettingsMetrics.controlWidth)
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
             }
+        }
+    }
 
-            SettingsSection("Source Control", showsDivider: false) {
-                SettingsRow("Display Mode") {
+    @ViewBuilder
+    private var sourceControlSection: some View {
+        if isSectionVisible(["Display Mode"], extra: ["vcs", "git"]) {
+            Section("Source Control") {
+                SettingsSearchableRow("Display Mode", keywords: ["vcs", "git"]) {
                     Picker("", selection: $vcsDisplayMode) {
                         ForEach(VCSDisplayMode.allCases) { mode in
                             Text(mode.title).tag(mode.rawValue)
@@ -84,15 +108,9 @@ struct AppearanceSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: SettingsMetrics.controlWidth)
+                    .fixedSize()
                 }
             }
-        }
-        .task {
-            refreshThemeNames()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .themeDidChange)) { _ in
-            refreshThemeNames()
         }
     }
 
@@ -105,17 +123,11 @@ struct AppearanceSettingsView: View {
             isPresented.wrappedValue.toggle()
         } label: {
             HStack(spacing: 6) {
-                Text(title)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                    .lineLimit(1)
+                Text(title).lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(.plain)
         .popover(isPresented: isPresented) {
             ThemePicker(mode: mode)
                 .environment(themeService)
@@ -125,5 +137,12 @@ struct AppearanceSettingsView: View {
     private func refreshThemeNames() {
         currentLightTheme = themeService.currentLightThemeName()
         currentDarkTheme = themeService.currentDarkThemeName()
+    }
+
+    private func isSectionVisible(_ labels: [String], extra: [String] = []) -> Bool {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        let haystack = labels + extra
+        return haystack.contains { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 }
