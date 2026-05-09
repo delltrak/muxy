@@ -82,9 +82,9 @@ struct MainWindow: View {
                         .frame(width: topBarLeadingWidth)
                         .fixedSize(horizontal: true, vertical: false)
                         .overlay(alignment: .trailing) {
-                            HStack(spacing: 0) {
+                            HStack(spacing: UIMetrics.spacing1) {
+                                sidebarToggleButton
                                 navigationArrows
-                                Rectangle().fill(MuxyTheme.border).frame(width: 1)
                             }
                         }
                 }
@@ -93,9 +93,6 @@ struct MainWindow: View {
             .frame(height: UIMetrics.scaled(32))
             .background(WindowDragRepresentable())
             .muxyGlass(in: Rectangle())
-
-            Rectangle().fill(MuxyTheme.border).frame(height: 1)
-                .background(MuxyTheme.bg)
 
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
@@ -295,6 +292,16 @@ struct MainWindow: View {
             guard isPresented, let pending = appState.pendingLayoutApply else { return }
             presentLayoutApplyConfirmation(pending: pending)
         }
+    }
+
+    private var sidebarToggleButton: some View {
+        IconButton(
+            symbol: "sidebar.left",
+            accessibilityLabel: sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"
+        ) {
+            NotificationCenter.default.post(name: .toggleSidebar, object: nil)
+        }
+        .help("Toggle Sidebar (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
     }
 
     private var navigationArrows: some View {
@@ -601,11 +608,15 @@ struct MainWindow: View {
             collapsedStyle: sidebarCollapsedStyle,
             expandedStyle: sidebarExpandedStyle
         ) + 1
-        let navigationMinimum = trafficLightWidth + navigationArrowsWidth
+        let navigationMinimum = trafficLightWidth + topBarLeadingButtonsWidth
         return max(navigationMinimum, sidebarWidth)
     }
 
     private var navigationArrowsWidth: CGFloat { UIMetrics.scaled(52) }
+    private var sidebarToggleButtonWidth: CGFloat { UIMetrics.scaled(32) }
+    private var topBarLeadingButtonsWidth: CGFloat {
+        sidebarToggleButtonWidth + UIMetrics.spacing1 + navigationArrowsWidth
+    }
 
     private var devModeBadge: some View {
         DebugButton()

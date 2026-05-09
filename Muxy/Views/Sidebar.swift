@@ -434,8 +434,6 @@ struct SidebarFooter: View {
                 IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
                     .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
                     .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
-                IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                    .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
             }
         }
         .padding(.bottom, UIMetrics.spacing4)
@@ -444,9 +442,6 @@ struct SidebarFooter: View {
     private var expandedFooter: some View {
         SidebarFooterContainer {
             HStack(spacing: UIMetrics.spacing2) {
-                IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                    .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
-
                 Spacer()
 
                 if usageEnabled {
