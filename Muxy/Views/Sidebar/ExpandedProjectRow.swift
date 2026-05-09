@@ -273,8 +273,7 @@ struct ExpandedProjectRow: View {
     }
 
     private var resolvedLogo: NSImage? {
-        guard let filename = project.logo else { return nil }
-        return NSImage(contentsOfFile: ProjectLogoStorage.logoPath(for: filename))
+        ProjectLogoCache.shared.image(forFilename: project.logo)
     }
 
     private func iconBackground(hasLogo: Bool) -> AnyShapeStyle {
