@@ -466,9 +466,9 @@ private struct EditorBreadcrumb: View {
 
     private var breadcrumbAccessibilityLabel: String {
         var label = relativePath
-        if state.isModified { label += ", modified" }
-        if state.isReadOnly { label += ", read-only" }
-        label += ", Line \(state.cursorLine), Column \(state.cursorColumn)"
+        if state.isModified { label += String(localized: ", modified") }
+        if state.isReadOnly { label += String(localized: ", read-only") }
+        label += String(localized: ", Line \(state.cursorLine), Column \(state.cursorColumn)")
         return label
     }
 }

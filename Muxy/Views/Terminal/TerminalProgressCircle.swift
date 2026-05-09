@@ -5,6 +5,7 @@ struct TerminalProgressCircle: View {
     var size: CGFloat = 12
     var lineWidth: CGFloat = 1.5
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rotation: Double = 0
 
     var body: some View {
@@ -16,22 +17,30 @@ struct TerminalProgressCircle: View {
                 Circle()
                     .trim(from: 0, to: 0.28)
                     .stroke(tintColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .rotationEffect(.degrees(rotation))
+                    .rotationEffect(.degrees(reduceMotion ? -90 : rotation))
             } else {
                 Circle()
                     .trim(from: 0, to: trimEnd)
                     .stroke(tintColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut(duration: 0.2), value: trimEnd)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: trimEnd)
             }
         }
         .frame(width: size, height: size)
         .onAppear {
-            guard progress.kind == .indeterminate else { return }
+            guard progress.kind == .indeterminate, !reduceMotion else { return }
             startSpin()
         }
         .onChange(of: progress.kind) { _, kind in
-            guard kind == .indeterminate else { return }
+            guard kind == .indeterminate, !reduceMotion else { return }
+            startSpin()
+        }
+        .onChange(of: reduceMotion) { _, newValue in
+            if newValue {
+                rotation = 0
+                return
+            }
+            guard progress.kind == .indeterminate else { return }
             startSpin()
         }
         .accessibilityElement()
