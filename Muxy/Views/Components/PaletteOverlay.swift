@@ -31,7 +31,8 @@ struct PaletteOverlay<Item: Identifiable & Sendable, RowContent: View>: View {
                 resultsList
             }
             .frame(width: UIMetrics.scaled(500), height: UIMetrics.scaled(380))
-            .background(panelBackground)
+            .muxyGlass(in: RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
+            .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))

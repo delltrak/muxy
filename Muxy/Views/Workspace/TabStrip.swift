@@ -69,48 +69,50 @@ struct PaneTabStrip: View {
             .frame(maxWidth: .infinity)
             .frame(height: UIMetrics.scaled(32))
 
-            HStack(spacing: 0) {
-                if showDevelopmentBadge {
-                    developmentBadge
-                        .padding(.trailing, UIMetrics.spacing3)
-                }
-                if isWindowTitleBar {
-                    OpenInIDEControl(
-                        projectPath: openInIDEProjectPath,
-                        filePath: openInIDEFilePath,
-                        cursorProvider: openInIDECursorProvider
-                    )
-                    LayoutPickerMenu(projectID: projectID)
-                }
-                if isWindowTitleBar, let version = UpdateService.shared.availableUpdateVersion {
-                    UpdateBadge(version: version) {
-                        UpdateService.shared.checkForUpdates()
+            TabStripToolbarContainer {
+                HStack(spacing: 0) {
+                    if showDevelopmentBadge {
+                        developmentBadge
+                            .padding(.trailing, UIMetrics.spacing3)
                     }
-                    .padding(.trailing, UIMetrics.spacing2)
-                }
-                IconButton(symbol: "square.split.2x1", accessibilityLabel: "Split Right") { onSplit(.horizontal) }
-                    .help(shortcutTooltip("Split Right", for: .splitRight))
-                IconButton(symbol: "square.split.1x2", accessibilityLabel: "Split Down") { onSplit(.vertical) }
-                    .help(shortcutTooltip("Split Down", for: .splitDown))
-                IconButton(symbol: "plus", accessibilityLabel: "New Tab") { onCreateTab() }
-                    .help(shortcutTooltip("New Tab", for: .newTab))
-                if showVCSButton {
-                    IconButton(symbol: "doc.text", size: 12, accessibilityLabel: "Quick Open") {
-                        NotificationCenter.default.post(name: .quickOpen, object: nil)
+                    if isWindowTitleBar {
+                        OpenInIDEControl(
+                            projectPath: openInIDEProjectPath,
+                            filePath: openInIDEFilePath,
+                            cursorProvider: openInIDECursorProvider
+                        )
+                        LayoutPickerMenu(projectID: projectID)
                     }
-                    .help(shortcutTooltip("Quick Open", for: .quickOpen))
-                    FileDiffIconButton(action: onCreateVCSTab)
-                        .help(shortcutTooltip("Source Control", for: .openVCSTab))
-                    FileTreeIconButton {
-                        NotificationCenter.default.post(name: .toggleFileTree, object: nil)
+                    if isWindowTitleBar, let version = UpdateService.shared.availableUpdateVersion {
+                        UpdateBadge(version: version) {
+                            UpdateService.shared.checkForUpdates()
+                        }
+                        .padding(.trailing, UIMetrics.spacing2)
                     }
-                    .help(shortcutTooltip("File Tree", for: .toggleFileTree))
+                    IconButton(symbol: "square.split.2x1", accessibilityLabel: "Split Right") { onSplit(.horizontal) }
+                        .help(shortcutTooltip("Split Right", for: .splitRight))
+                    IconButton(symbol: "square.split.1x2", accessibilityLabel: "Split Down") { onSplit(.vertical) }
+                        .help(shortcutTooltip("Split Down", for: .splitDown))
+                    IconButton(symbol: "plus", accessibilityLabel: "New Tab") { onCreateTab() }
+                        .help(shortcutTooltip("New Tab", for: .newTab))
+                    if showVCSButton {
+                        IconButton(symbol: "doc.text", size: 12, accessibilityLabel: "Quick Open") {
+                            NotificationCenter.default.post(name: .quickOpen, object: nil)
+                        }
+                        .help(shortcutTooltip("Quick Open", for: .quickOpen))
+                        FileDiffIconButton(action: onCreateVCSTab)
+                            .help(shortcutTooltip("Source Control", for: .openVCSTab))
+                        FileTreeIconButton {
+                            NotificationCenter.default.post(name: .toggleFileTree, object: nil)
+                        }
+                        .help(shortcutTooltip("File Tree", for: .toggleFileTree))
+                    }
                 }
+                .padding(.leading, UIMetrics.spacing4)
+                .padding(.trailing, UIMetrics.spacing2)
+                .fixedSize(horizontal: true, vertical: false)
+                .background(WindowDragRepresentable(alwaysEnabled: isWindowTitleBar))
             }
-            .padding(.leading, UIMetrics.spacing4)
-            .padding(.trailing, UIMetrics.spacing2)
-            .fixedSize(horizontal: true, vertical: false)
-            .background(WindowDragRepresentable(alwaysEnabled: isWindowTitleBar))
         }
         .frame(height: UIMetrics.scaled(32))
         .onPreferenceChange(TabFramePreferenceKey.self) { frames in
@@ -292,6 +294,20 @@ struct PaneTabStrip: View {
 
         if hoveredTargetID == nil {
             dragState.lastReorderTargetID = nil
+        }
+    }
+}
+
+private struct TabStripToolbarContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 0) {
+                content()
+            }
+        } else {
+            content()
         }
     }
 }

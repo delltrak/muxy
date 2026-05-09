@@ -92,7 +92,7 @@ struct MainWindow: View {
             }
             .frame(height: UIMetrics.scaled(32))
             .background(WindowDragRepresentable())
-            .background(MuxyTheme.bg)
+            .muxyGlass(in: Rectangle())
 
             Rectangle().fill(MuxyTheme.border).frame(height: 1)
                 .background(MuxyTheme.bg)
@@ -106,7 +106,7 @@ struct MainWindow: View {
                     }
                 }
                 .fixedSize(horizontal: true, vertical: false)
-                .background(MuxyTheme.bg)
+                .muxyGlass(in: Rectangle())
 
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {

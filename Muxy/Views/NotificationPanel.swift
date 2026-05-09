@@ -93,7 +93,7 @@ struct NotificationPanel: View {
             }
             .padding(.vertical, UIMetrics.spacing2)
         }
-        .background(MuxyTheme.bg)
+        .muxyGlass(.tinted(MuxyTheme.accent.opacity(0.05)), in: Rectangle())
     }
 
     private var emptyState: some View {
@@ -121,7 +121,7 @@ struct NotificationPanel: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .background(MuxyTheme.bg)
+        .muxyGlass(.tinted(MuxyTheme.accent.opacity(0.05)), in: Rectangle())
     }
 
     private func notificationAccessibilityLabel(for item: NotificationPanelItem) -> String {
