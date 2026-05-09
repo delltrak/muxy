@@ -46,8 +46,15 @@ final class TerminalProgressStore {
     }
 
     func setProgress(_ progress: TerminalProgress?, for paneID: UUID, projectID: UUID?) {
-        pendingProgress[paneID] = PendingProgress(progress: progress, projectID: projectID)
-        if coalesceWorkItems[paneID] != nil { return }
+        if coalesceWorkItems[paneID] != nil {
+            pendingProgress[paneID] = PendingProgress(progress: progress, projectID: projectID)
+            return
+        }
+        applyProgress(progress, for: paneID, projectID: projectID)
+        startCoalesceWindow(for: paneID)
+    }
+
+    private func startCoalesceWindow(for paneID: UUID) {
         let workItem = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
                 self?.flushPendingProgress(for: paneID)
@@ -61,6 +68,7 @@ final class TerminalProgressStore {
         coalesceWorkItems.removeValue(forKey: paneID)
         guard let pending = pendingProgress.removeValue(forKey: paneID) else { return }
         applyProgress(pending.progress, for: paneID, projectID: pending.projectID)
+        startCoalesceWindow(for: paneID)
     }
 
     private func applyProgress(_ progress: TerminalProgress?, for paneID: UUID, projectID: UUID?) {

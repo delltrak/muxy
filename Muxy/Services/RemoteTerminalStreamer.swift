@@ -44,7 +44,7 @@ final class RemoteTerminalStreamer {
         RemotePaneOwnershipCache.shared.setOwned(paneID: paneID, owned: hasRemoteOwner)
     }
 
-    fileprivate func pane(for token: Int) -> UUID? {
+    private func pane(for token: Int) -> UUID? {
         paneByToken[token]
     }
 
