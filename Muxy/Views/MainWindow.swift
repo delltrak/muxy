@@ -82,9 +82,9 @@ struct MainWindow: View {
                         .frame(width: topBarLeadingWidth)
                         .fixedSize(horizontal: true, vertical: false)
                         .overlay(alignment: .trailing) {
-                            HStack(spacing: 0) {
+                            HStack(spacing: UIMetrics.spacing1) {
+                                sidebarToggleButton
                                 navigationArrows
-                                Rectangle().fill(MuxyTheme.border).frame(width: 1)
                             }
                         }
                 }
@@ -92,10 +92,7 @@ struct MainWindow: View {
             }
             .frame(height: UIMetrics.scaled(32))
             .background(WindowDragRepresentable())
-            .background(MuxyTheme.bg)
-
-            Rectangle().fill(MuxyTheme.border).frame(height: 1)
-                .background(MuxyTheme.bg)
+            .muxyGlass(in: Rectangle())
 
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
@@ -106,7 +103,7 @@ struct MainWindow: View {
                     }
                 }
                 .fixedSize(horizontal: true, vertical: false)
-                .background(MuxyTheme.bg)
+                .muxyGlass(in: Rectangle())
 
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
@@ -297,6 +294,16 @@ struct MainWindow: View {
         }
     }
 
+    private var sidebarToggleButton: some View {
+        IconButton(
+            symbol: "sidebar.left",
+            accessibilityLabel: sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"
+        ) {
+            NotificationCenter.default.post(name: .toggleSidebar, object: nil)
+        }
+        .help("Toggle Sidebar (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
+    }
+
     private var navigationArrows: some View {
         HStack(spacing: UIMetrics.spacing1) {
             NavigationArrowButton(
@@ -388,11 +395,11 @@ struct MainWindow: View {
                 },
                 onSetCustomTitle: { tabID, title in
                     area.setCustomTitle(tabID, title: title)
-                    appState.saveWorkspaces()
+                    appState.scheduleSaveWorkspaces()
                 },
                 onSetColorID: { tabID, colorID in
                     area.setColorID(tabID, colorID: colorID)
-                    appState.saveWorkspaces()
+                    appState.scheduleSaveWorkspaces()
                 },
                 onReorderTab: { fromOffsets, toOffset in
                     area.reorderTab(fromOffsets: fromOffsets, toOffset: toOffset)
@@ -601,11 +608,15 @@ struct MainWindow: View {
             collapsedStyle: sidebarCollapsedStyle,
             expandedStyle: sidebarExpandedStyle
         ) + 1
-        let navigationMinimum = trafficLightWidth + navigationArrowsWidth
+        let navigationMinimum = trafficLightWidth + topBarLeadingButtonsWidth
         return max(navigationMinimum, sidebarWidth)
     }
 
     private var navigationArrowsWidth: CGFloat { UIMetrics.scaled(52) }
+    private var sidebarToggleButtonWidth: CGFloat { UIMetrics.scaled(32) }
+    private var topBarLeadingButtonsWidth: CGFloat {
+        sidebarToggleButtonWidth + UIMetrics.spacing1 + navigationArrowsWidth
+    }
 
     private var devModeBadge: some View {
         DebugButton()

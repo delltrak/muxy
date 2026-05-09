@@ -8,42 +8,22 @@ struct AIUsageSettingsView: View {
     @State private var usageDisplayMode = AIUsageSettingsStore.usageDisplayMode()
     @State private var autoRefreshInterval = AIUsageSettingsStore.autoRefreshInterval()
 
+    @Environment(\.settingsSearchQuery) private var searchQuery
+
     private var providers: [AIUsageProviderCatalogEntry] {
         AIUsageProviderCatalog.providers
     }
 
-    private let gridColumns: [GridItem] = [
-        GridItem(.flexible(minimum: 140), spacing: 12),
-        GridItem(.flexible(minimum: 140), spacing: 12),
-    ]
-
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("AI Usage")
-                    .font(.system(size: 12, weight: .medium))
-
-                Spacer()
-
-                Toggle("", isOn: $usageEnabled)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.9)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
-            Divider().padding(.horizontal, 12)
-
+        Form {
+            usageEnabledSection
             if usageEnabled {
-                enabledSettings
-            } else {
-                disabledSettings
+                displaySection
+                providersSection
             }
-
-            Spacer(minLength: 0)
         }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .onChange(of: usageEnabled) { _, enabled in
             AIUsageSettingsStore.setUsageEnabled(enabled)
             if enabled {
@@ -61,144 +41,117 @@ struct AIUsageSettingsView: View {
         }
     }
 
-    private var disabledSettings: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Enable AI Usage to show the usage board in the sidebar.")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+    @ViewBuilder
+    private var usageEnabledSection: some View {
+        if isSectionVisible(["Enable AI Usage"], extra: ["sidebar", "usage"]) {
+            Section {
+                SettingsSearchableRow("Enable AI Usage", keywords: ["sidebar", "board"]) {
+                    Toggle("", isOn: $usageEnabled).labelsHidden()
+                }
+            } header: {
+                Text("AI Usage")
+            } footer: {
+                if !usageEnabled {
+                    Text("Enable AI Usage to show the usage board in the sidebar.")
+                }
+            }
         }
     }
 
-    private var enabledSettings: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("Show")
-                    .font(.system(size: 12, weight: .medium))
-
-                Spacer()
-
-                Picker("Show", selection: $usageDisplayMode) {
-                    ForEach(AIUsageDisplayMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
+    @ViewBuilder
+    private var displaySection: some View {
+        let labels = ["Show", "Auto Refresh", "Show Secondary Limits"]
+        if isSectionVisible(labels) {
+            Section {
+                SettingsSearchableRow("Show", keywords: ["display", "mode"]) {
+                    Picker("", selection: $usageDisplayMode) {
+                        ForEach(AIUsageDisplayMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 180)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
-            Divider().padding(.horizontal, 12)
-
-            HStack(spacing: 8) {
-                Text("Auto Refresh")
-                    .font(.system(size: 12, weight: .medium))
-
-                Spacer()
-
-                Picker("Auto Refresh", selection: $autoRefreshInterval) {
-                    ForEach(AIUsageAutoRefreshInterval.allCases) { interval in
-                        Text(interval.label).tag(interval)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(width: 100)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
-            Divider().padding(.horizontal, 12)
-
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Show Secondary Limits")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("Display weekly and monthly quotas alongside the primary session usage.")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Toggle("", isOn: $showSecondaryLimits)
                     .labelsHidden()
-                    .toggleStyle(.switch)
-                    .scaleEffect(0.9)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
-            Divider().padding(.horizontal, 12)
-
-            HStack(spacing: 8) {
-                Text("Choose which providers appear on the usage board.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Button {
-                    refreshUsage()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Refresh")
-                            .font(.system(size: 11, weight: .medium))
-                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
-                .buttonStyle(.borderless)
-                .disabled(usageService.isRefreshing)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
 
-            Divider().padding(.horizontal, 12)
-
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 8) {
-                    ForEach(providers) { provider in
-                        providerCell(provider)
+                SettingsSearchableRow("Auto Refresh", keywords: ["interval", "refresh"]) {
+                    Picker("", selection: $autoRefreshInterval) {
+                        ForEach(AIUsageAutoRefreshInterval.allCases) { interval in
+                            Text(interval.label).tag(interval)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(minWidth: 110)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+
+                SettingsSearchableRow(
+                    "Show Secondary Limits",
+                    keywords: ["weekly", "monthly", "quota"]
+                ) {
+                    Toggle("", isOn: $showSecondaryLimits).labelsHidden()
+                }
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("Display weekly and monthly quotas alongside the primary session usage.")
             }
         }
     }
 
-    private func providerCell(_ provider: AIUsageProviderCatalogEntry) -> some View {
-        HStack(spacing: 8) {
-            ProviderIconView(iconName: provider.iconName, size: 16, style: .monochrome(.primary))
+    @ViewBuilder
+    private var providersSection: some View {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        let visible = trimmed.isEmpty
+            ? providers
+            : providers.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
+        let headerMatches = trimmed.isEmpty || "Providers".localizedCaseInsensitiveContains(trimmed)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(provider.displayName)
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-
-                if provider.hasNotificationIntegration {
-                    Text("Integrated")
-                        .font(.system(size: 9, weight: .semibold))
+        if !visible.isEmpty || headerMatches {
+            Section {
+                if visible.isEmpty {
+                    Text("No providers match your search.")
                         .foregroundStyle(.secondary)
+                } else {
+                    ForEach(visible) { provider in
+                        providerRow(provider)
+                    }
                 }
+                HStack {
+                    Spacer()
+                    Button {
+                        refreshUsage()
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .controlSize(.regular)
+                    .disabled(usageService.isRefreshing)
+                }
+            } header: {
+                Text("Providers")
+            } footer: {
+                Text("Choose which providers appear on the usage board.")
             }
+        }
+    }
 
-            Spacer(minLength: 0)
-
+    private func providerRow(_ provider: AIUsageProviderCatalogEntry) -> some View {
+        LabeledContent {
             Toggle("", isOn: providerToggleBinding(for: provider))
                 .labelsHidden()
-                .toggleStyle(.switch)
-                .scaleEffect(0.9)
+        } label: {
+            HStack(spacing: 8) {
+                ProviderIconView(iconName: provider.iconName, size: 16, style: .monochrome(.primary))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(provider.displayName)
+                    if provider.hasNotificationIntegration {
+                        Text("Integrated")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func providerToggleBinding(for provider: AIUsageProviderCatalogEntry) -> Binding<Bool> {
@@ -217,5 +170,12 @@ struct AIUsageSettingsView: View {
         Task {
             await usageService.refresh(force: true)
         }
+    }
+
+    private func isSectionVisible(_ labels: [String], extra: [String] = []) -> Bool {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        let haystack = labels + extra
+        return haystack.contains { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 }

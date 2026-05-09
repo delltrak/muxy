@@ -61,7 +61,7 @@ struct PullRequestsListView: View {
                     Text(filterLabel(state.pullRequestStateFilter))
                         .font(.system(size: UIMetrics.fontFootnote, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 }
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .padding(.horizontal, UIMetrics.spacing3)
@@ -169,49 +169,53 @@ struct PullRequestRow: View {
     @State private var hovered = false
 
     var body: some View {
-        HStack(spacing: UIMetrics.spacing4) {
-            stateBadge
-            VStack(alignment: .leading, spacing: UIMetrics.spacing1) {
-                HStack(spacing: UIMetrics.spacing3) {
-                    Text(pr.title)
-                        .font(.system(size: UIMetrics.fontBody, weight: .medium))
-                        .foregroundStyle(MuxyTheme.fg)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Text("#\(pr.number)")
-                        .font(.system(size: UIMetrics.fontFootnote, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(MuxyTheme.fgDim)
+        Button(action: onCheckout) {
+            HStack(spacing: UIMetrics.spacing4) {
+                stateBadge
+                VStack(alignment: .leading, spacing: UIMetrics.spacing1) {
+                    HStack(spacing: UIMetrics.spacing3) {
+                        Text(pr.title)
+                            .font(.system(size: UIMetrics.fontBody, weight: .medium))
+                            .foregroundStyle(MuxyTheme.fg)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text("#\(pr.number)")
+                            .font(.system(size: UIMetrics.fontFootnote, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(MuxyTheme.fgDim)
+                            .monospacedDigit()
+                    }
+                    HStack(spacing: UIMetrics.spacing2) {
+                        Text(pr.author)
+                            .font(.system(size: UIMetrics.fontCaption))
+                            .foregroundStyle(MuxyTheme.fgMuted)
+                        Text("•")
+                            .font(.system(size: UIMetrics.fontCaption))
+                            .foregroundStyle(MuxyTheme.fgDim)
+                        Image(systemName: "arrow.triangle.branch")
+                            .font(.system(size: UIMetrics.fontXS))
+                            .foregroundStyle(MuxyTheme.fgDim)
+                        Text("\(pr.headBranch) → \(pr.baseBranch)")
+                            .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
+                            .foregroundStyle(MuxyTheme.fgMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
-                HStack(spacing: UIMetrics.spacing2) {
-                    Text(pr.author)
-                        .font(.system(size: UIMetrics.fontCaption))
-                        .foregroundStyle(MuxyTheme.fgMuted)
-                    Text("•")
-                        .font(.system(size: UIMetrics.fontCaption))
-                        .foregroundStyle(MuxyTheme.fgDim)
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: UIMetrics.fontXS))
-                        .foregroundStyle(MuxyTheme.fgDim)
-                    Text("\(pr.headBranch) → \(pr.baseBranch)")
-                        .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
-                        .foregroundStyle(MuxyTheme.fgMuted)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                Spacer(minLength: 0)
+                checksBadge
+                if hovered || isCheckingOut {
+                    checkoutButton
                 }
             }
-            Spacer(minLength: 0)
-            checksBadge
-            if hovered || isCheckingOut {
-                checkoutButton
-            }
+            .padding(.horizontal, UIMetrics.spacing5)
+            .frame(height: UIMetrics.scaled(44))
+            .background(hovered ? MuxyTheme.surface : MuxyTheme.bg)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, UIMetrics.spacing5)
-        .frame(height: UIMetrics.scaled(44))
-        .background(hovered ? MuxyTheme.surface : MuxyTheme.bg)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .onTapGesture(perform: onCheckout)
         .help("Checkout PR #\(pr.number)")
+        .accessibilityLabel("PR #\(pr.number): \(pr.title)")
     }
 
     @ViewBuilder
@@ -259,7 +263,7 @@ struct PullRequestRow: View {
                     ProgressView().controlSize(.mini)
                 } else {
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: UIMetrics.fontXS, weight: .bold))
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 }
                 Text("Checkout")
                     .font(.system(size: UIMetrics.fontCaption, weight: .medium))

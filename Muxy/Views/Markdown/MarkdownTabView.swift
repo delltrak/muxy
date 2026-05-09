@@ -144,7 +144,7 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.layer?.backgroundColor = palette.background.cgColor
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = palette.background
-        webView.onReloadFromDisk = onReloadFromDisk
+        context.coordinator.bind(webView: webView, onReloadFromDisk: onReloadFromDisk)
         context.coordinator.configure(with: configuration)
         if scrollSyncEnabled {
             context.coordinator.applyPreferredScroll(
@@ -159,7 +159,7 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: MarkdownPreviewWebView, context: Context) {
-        webView.onReloadFromDisk = onReloadFromDisk
+        context.coordinator.bind(webView: webView, onReloadFromDisk: onReloadFromDisk)
         context.coordinator.configure(with: configuration)
         context.coordinator.updateHTML(
             contentUpdateRequest,
@@ -206,6 +206,17 @@ struct MarkdownWebView: NSViewRepresentable {
         private var isNavigationInFlight = false
         private var programmaticScrollSuppressionUntil: Date?
         private var lastAnchorGeometrySnapshot: [MarkdownPreviewAnchorGeometry] = []
+        private weak var boundWebView: MarkdownPreviewWebView?
+        private var didBindReloadHandler = false
+
+        func bind(webView: MarkdownPreviewWebView, onReloadFromDisk: (() -> Void)?) {
+            if boundWebView === webView, didBindReloadHandler {
+                return
+            }
+            boundWebView = webView
+            webView.onReloadFromDisk = onReloadFromDisk
+            didBindReloadHandler = true
+        }
 
         func configure(with configuration: Configuration) {
             scrollSyncEnabled = configuration.scrollSyncEnabled
@@ -437,34 +448,38 @@ struct MarkdownWebView: NSViewRepresentable {
             to webView: WKWebView,
             reason: String
         ) {
-            let script = """
-            \(MarkdownRenderer.updateScript(content: content))
-            \(MarkdownPreviewAnchorGeometryBridge.requestMeasureScript(reason: reason))
-            """
-            webView.evaluateJavaScript(script) { [weak self] _, error in
-                if let error {
-                    markdownWebLogger.error(
-                        "Failed updating markdown content in-place: \(error.localizedDescription, privacy: .public)"
-                    )
-                    return
-                }
+            let measureScript = MarkdownPreviewAnchorGeometryBridge.requestMeasureScript(reason: reason)
+            Task.detached(priority: .userInitiated) { [weak self, weak webView] in
+                let updateScript = MarkdownRenderer.updateScript(content: content)
+                let script = "\(updateScript)\n\(measureScript)"
+                await MainActor.run {
+                    guard let webView else { return }
+                    webView.evaluateJavaScript(script) { [weak self] _, error in
+                        if let error {
+                            markdownWebLogger.error(
+                                "Failed updating markdown content in-place: \(error.localizedDescription, privacy: .public)"
+                            )
+                            return
+                        }
 
-                guard let self else { return }
-                self.lastRenderedContent = content
-                self.collectJavaScriptErrors(from: webView)
-                self.applyPendingFragmentTargetIfNeeded(to: webView)
-                if self.scrollSyncEnabled,
-                   let pendingSyncScrollTop = self.pendingSyncScrollTop,
-                   self.pendingSyncRequestVersion >= 0
-                {
-                    let pendingRequestVersion = self.pendingSyncRequestVersion
-                    self.pendingSyncScrollTop = nil
-                    self.pendingSyncRequestVersion = -1
-                    self.applyPreferredScroll(
-                        requestVersion: pendingRequestVersion,
-                        scrollTop: pendingSyncScrollTop,
-                        to: webView
-                    )
+                        guard let self else { return }
+                        self.lastRenderedContent = content
+                        self.collectJavaScriptErrors(from: webView)
+                        self.applyPendingFragmentTargetIfNeeded(to: webView)
+                        if self.scrollSyncEnabled,
+                           let pendingSyncScrollTop = self.pendingSyncScrollTop,
+                           self.pendingSyncRequestVersion >= 0
+                        {
+                            let pendingRequestVersion = self.pendingSyncRequestVersion
+                            self.pendingSyncScrollTop = nil
+                            self.pendingSyncRequestVersion = -1
+                            self.applyPreferredScroll(
+                                requestVersion: pendingRequestVersion,
+                                scrollTop: pendingSyncScrollTop,
+                                to: webView
+                            )
+                        }
+                    }
                 }
             }
         }

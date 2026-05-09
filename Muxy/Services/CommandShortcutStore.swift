@@ -27,7 +27,7 @@ final class FileCommandShortcutPersistence: CommandShortcutPersisting {
     }
 
     func saveConfiguration(_ configuration: CommandShortcutConfiguration) throws {
-        try store.save(StoredCommandShortcutConfiguration(configuration: configuration))
+        store.saveAsync(StoredCommandShortcutConfiguration(configuration: configuration))
     }
 }
 

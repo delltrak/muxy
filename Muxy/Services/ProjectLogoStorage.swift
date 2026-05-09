@@ -16,6 +16,7 @@ enum ProjectLogoStorage {
         return dir
     }
 
+    @MainActor
     static func save(croppedImage image: NSImage, forProjectID projectID: UUID) -> String? {
         guard let tiffData = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffData),
@@ -34,6 +35,7 @@ enum ProjectLogoStorage {
                 try FileManager.default.removeItem(at: destURL)
             }
             try pngData.write(to: destURL, options: .atomic)
+            ProjectLogoCache.shared.invalidate(filename: filename)
             return filename
         } catch {
             logger.error("Failed to save project logo: \(error)")
@@ -47,6 +49,7 @@ enum ProjectLogoStorage {
             .path
     }
 
+    @MainActor
     static func remove(forProjectID projectID: UUID) {
         let dir = logosDirectory()
         guard let contents = try? FileManager.default.contentsOfDirectory(
@@ -58,6 +61,7 @@ enum ProjectLogoStorage {
         let prefix = projectID.uuidString
         for file in contents where file.deletingPathExtension().lastPathComponent == prefix {
             try? FileManager.default.removeItem(at: file)
+            ProjectLogoCache.shared.invalidate(filename: file.lastPathComponent)
         }
     }
 }

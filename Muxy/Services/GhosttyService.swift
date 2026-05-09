@@ -119,6 +119,11 @@ final class GhosttyService {
 
     func reloadConfig() {
         refreshConfig(postThemeChangeNotification: false)
+        let isDark = ThemeService.isCurrentAppearanceDark()
+        TerminalViewRegistry.shared.applyColorSchemeToAllViews(isDark: isDark)
+        if let config {
+            TerminalViewRegistry.shared.applyConfigUpdateToAllViews(config)
+        }
     }
 
     func appearanceDidChange() {
@@ -148,13 +153,27 @@ final class GhosttyService {
         configPath.withCString { ptr in
             ghostty_config_load_file(cfg, ptr)
         }
+        ghostty_config_load_recursive_files(cfg)
         ghostty_config_finalize(cfg)
+        let diagCount = ghostty_config_diagnostics_count(cfg)
+        if diagCount > 0 {
+            for i in 0 ..< diagCount {
+                let diag = ghostty_config_get_diagnostic(cfg, i)
+                let message = String(cString: diag.message)
+                logger.error("ghostty config diagnostic: \(message)")
+            }
+        }
         return cfg
     }
 
     func tick() {
         guard let app else { return }
         ghostty_app_tick(app)
+    }
+
+    func setAppFocused(_ focused: Bool) {
+        guard let app else { return }
+        ghostty_app_set_focus(app, focused)
     }
 
     private func resolveGhosttyResources() {

@@ -127,9 +127,112 @@ struct TerminalBridge: NSViewRepresentable {
     @Environment(\.overlayActive) private var overlayActive
     @Environment(\.activeWorktreeKey) private var worktreeKey
 
+    @MainActor
     final class Coordinator {
         var wasFocused = false
         var wasOverlayActive = false
+        var onFocus: (() -> Void)?
+        var onProcessExit: (() -> Void)?
+        var onSplitRequest: ((SplitDirection, SplitPosition) -> Void)?
+        weak var boundView: GhosttyTerminalNSView?
+        var didInstallCallbacks = false
+
+        func install(into view: GhosttyTerminalNSView, state: TerminalPaneState, areaID: UUID, projectID: UUID?) {
+            boundView = view
+            view.onFocus = { [weak self] in self?.onFocus?() }
+            view.onProcessExit = { [weak self] in self?.onProcessExit?() }
+            view.onSplitRequest = { [weak self] direction, position in
+                self?.onSplitRequest?(direction, position)
+            }
+            view.onExternalDragHoverChange = { hovering in
+                NotificationCenter.default.post(
+                    name: .externalDragHoverChanged,
+                    object: nil,
+                    userInfo: [
+                        ExternalDragHoverUserInfoKey.isHovering: hovering,
+                        ExternalDragHoverUserInfoKey.areaID: areaID,
+                    ]
+                )
+            }
+            view.onTitleChange = { [weak state] title in
+                DispatchQueue.main.async {
+                    state?.setTitle(title)
+                }
+            }
+            view.onWorkingDirectoryChange = { [weak state] path in
+                DispatchQueue.main.async {
+                    state?.setWorkingDirectory(path)
+                }
+            }
+            installSearchCallbacks(view: view, state: state)
+            installFileOpenCallbacks(view: view, projectPath: state.projectPath, projectID: projectID)
+            installProgressCallback(view: view, paneID: state.id, projectID: projectID)
+            didInstallCallbacks = true
+        }
+
+        private func installSearchCallbacks(view: GhosttyTerminalNSView, state: TerminalPaneState) {
+            view.onSearchStart = { [weak state, weak view] needle in
+                guard let state else { return }
+                let searchState = state.searchState
+                if let needle, !needle.isEmpty {
+                    searchState.needle = needle
+                }
+                searchState.isVisible = true
+                searchState.focusVersion += 1
+                searchState.startPublishing { [weak view] query in
+                    view?.sendSearchQuery(query)
+                }
+                if !searchState.needle.isEmpty {
+                    searchState.pushNeedle()
+                }
+            }
+            view.onSearchEnd = { [weak state] in
+                guard let state else { return }
+                state.searchState.stopPublishing()
+                state.searchState.isVisible = false
+                state.searchState.needle = ""
+                state.searchState.total = nil
+                state.searchState.selected = nil
+            }
+            view.onSearchTotal = { [weak state] total in
+                state?.searchState.total = total
+            }
+            view.onSearchSelected = { [weak state] selected in
+                state?.searchState.selected = selected
+            }
+        }
+
+        private func installFileOpenCallbacks(view: GhosttyTerminalNSView, projectPath: String, projectID: UUID?) {
+            view.onCmdClickFile = { token in
+                guard let projectID else { return }
+                guard let resolved = TerminalBridge.resolveFilePath(token, projectPath: projectPath) else { return }
+                Task { @MainActor in
+                    NotificationStore.shared.appState?.openFile(resolved, projectID: projectID, preserveFocus: true)
+                }
+            }
+            view.resolveCmdHoverFile = { token in
+                TerminalBridge.resolveFilePath(token, projectPath: projectPath) != nil
+            }
+            view.onOpenURL = { url in
+                if let projectID, url.isFileURL {
+                    let path = url.path
+                    guard !path.isEmpty, FileManager.default.fileExists(atPath: path) else { return false }
+                    Task { @MainActor in
+                        NotificationStore.shared.appState?.openFile(path, projectID: projectID, preserveFocus: true)
+                    }
+                    return true
+                }
+                return NSWorkspace.shared.open(url)
+            }
+        }
+
+        private func installProgressCallback(view: GhosttyTerminalNSView, paneID: UUID, projectID: UUID?) {
+            view.onProgressReport = { progress in
+                Task { @MainActor in
+                    TerminalProgressStore.shared.setProgress(progress, for: paneID, projectID: projectID)
+                }
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -150,23 +253,15 @@ struct TerminalBridge: NSViewRepresentable {
         view.isFocused = focused
         view.overlayActive = overlayActive
         view.setVisible(visible)
-        view.onFocus = onFocus
-        view.onProcessExit = onProcessExit
-        view.onSplitRequest = onSplitRequest
-        view.onExternalDragHoverChange = makeExternalDragHoverHandler(areaID: areaID)
-        view.onTitleChange = { [weak state] title in
-            DispatchQueue.main.async {
-                state?.setTitle(title)
-            }
-        }
-        view.onWorkingDirectoryChange = { [weak state] path in
-            DispatchQueue.main.async {
-                state?.setWorkingDirectory(path)
-            }
-        }
-        configureSearchCallbacks(view)
-        configureFileOpenCallback(view)
-        configureProgressCallback(view)
+        context.coordinator.onFocus = onFocus
+        context.coordinator.onProcessExit = onProcessExit
+        context.coordinator.onSplitRequest = onSplitRequest
+        context.coordinator.install(
+            into: view,
+            state: state,
+            areaID: areaID,
+            projectID: worktreeKey?.projectID
+        )
         context.coordinator.wasFocused = focused
         if focused, !overlayActive {
             view.notifySurfaceFocused()
@@ -188,23 +283,17 @@ struct TerminalBridge: NSViewRepresentable {
         }
         nsView.overlayActive = overlayActive
         nsView.setVisible(visible)
-        nsView.onFocus = onFocus
-        nsView.onProcessExit = onProcessExit
-        nsView.onSplitRequest = onSplitRequest
-        nsView.onExternalDragHoverChange = makeExternalDragHoverHandler(areaID: areaID)
-        nsView.onTitleChange = { [weak state] title in
-            DispatchQueue.main.async {
-                state?.setTitle(title)
-            }
+        context.coordinator.onFocus = onFocus
+        context.coordinator.onProcessExit = onProcessExit
+        context.coordinator.onSplitRequest = onSplitRequest
+        if !context.coordinator.didInstallCallbacks || context.coordinator.boundView !== nsView {
+            context.coordinator.install(
+                into: nsView,
+                state: state,
+                areaID: areaID,
+                projectID: worktreeKey?.projectID
+            )
         }
-        nsView.onWorkingDirectoryChange = { [weak state] path in
-            DispatchQueue.main.async {
-                state?.setWorkingDirectory(path)
-            }
-        }
-        configureSearchCallbacks(nsView)
-        configureFileOpenCallback(nsView)
-        configureProgressCallback(nsView)
         let wasFocused = context.coordinator.wasFocused
         let wasOverlayActive = context.coordinator.wasOverlayActive
         context.coordinator.wasFocused = focused
@@ -228,45 +317,6 @@ struct TerminalBridge: NSViewRepresentable {
         }
     }
 
-    private func makeExternalDragHoverHandler(areaID: UUID) -> (Bool) -> Void {
-        { hovering in
-            NotificationCenter.default.post(
-                name: .externalDragHoverChanged,
-                object: nil,
-                userInfo: [
-                    ExternalDragHoverUserInfoKey.isHovering: hovering,
-                    ExternalDragHoverUserInfoKey.areaID: areaID,
-                ]
-            )
-        }
-    }
-
-    private func configureFileOpenCallback(_ view: GhosttyTerminalNSView) {
-        let projectID = worktreeKey?.projectID
-        let projectPath = state.projectPath
-        view.onCmdClickFile = { token in
-            guard let projectID else { return }
-            guard let resolved = Self.resolveFilePath(token, projectPath: projectPath) else { return }
-            Task { @MainActor in
-                NotificationStore.shared.appState?.openFile(resolved, projectID: projectID, preserveFocus: true)
-            }
-        }
-        view.resolveCmdHoverFile = { token in
-            Self.resolveFilePath(token, projectPath: projectPath) != nil
-        }
-        view.onOpenURL = { url in
-            if let projectID, url.isFileURL {
-                let path = url.path
-                guard !path.isEmpty, FileManager.default.fileExists(atPath: path) else { return false }
-                Task { @MainActor in
-                    NotificationStore.shared.appState?.openFile(path, projectID: projectID, preserveFocus: true)
-                }
-                return true
-            }
-            return NSWorkspace.shared.open(url)
-        }
-    }
-
     static func resolveFilePath(_ token: String, projectPath: String) -> String? {
         let cleaned = token.trimmingCharacters(in: CharacterSet(charactersIn: "\"' \t\n\r()[]<>"))
         guard !cleaned.isEmpty else { return nil }
@@ -280,47 +330,5 @@ struct TerminalBridge: NSViewRepresentable {
         guard FileManager.default.fileExists(atPath: candidate, isDirectory: &isDirectory) else { return nil }
         guard !isDirectory.boolValue else { return nil }
         return candidate
-    }
-
-    private func configureProgressCallback(_ view: GhosttyTerminalNSView) {
-        let paneID = state.id
-        let projectID = worktreeKey?.projectID
-        view.onProgressReport = { progress in
-            Task { @MainActor in
-                TerminalProgressStore.shared.setProgress(progress, for: paneID, projectID: projectID)
-            }
-        }
-    }
-
-    private func configureSearchCallbacks(_ view: GhosttyTerminalNSView) {
-        view.onSearchStart = { [weak state] needle in
-            guard let state else { return }
-            let searchState = state.searchState
-            if let needle, !needle.isEmpty {
-                searchState.needle = needle
-            }
-            searchState.isVisible = true
-            searchState.focusVersion += 1
-            searchState.startPublishing { [weak view] query in
-                view?.sendSearchQuery(query)
-            }
-            if !searchState.needle.isEmpty {
-                searchState.pushNeedle()
-            }
-        }
-        view.onSearchEnd = { [weak state] in
-            guard let state else { return }
-            state.searchState.stopPublishing()
-            state.searchState.isVisible = false
-            state.searchState.needle = ""
-            state.searchState.total = nil
-            state.searchState.selected = nil
-        }
-        view.onSearchTotal = { [weak state] total in
-            state?.searchState.total = total
-        }
-        view.onSearchSelected = { [weak state] selected in
-            state?.searchState.selected = selected
-        }
     }
 }

@@ -88,6 +88,8 @@ final class AppState {
     var pendingSaveErrorMessage: String?
     let navigation = NavigationHistory()
     private var focusHistory: [WorktreeKey: [UUID]] = [:]
+    private var pendingSaveWork: DispatchWorkItem?
+    private static let saveDebounceInterval: DispatchTimeInterval = .milliseconds(400)
 
     init(
         selectionStore: any ActiveProjectSelectionStoring,
@@ -139,6 +141,31 @@ final class AppState {
     }
 
     func saveWorkspaces() {
+        pendingSaveWork?.cancel()
+        pendingSaveWork = nil
+        performWorkspaceSave()
+    }
+
+    func scheduleSaveWorkspaces() {
+        pendingSaveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.performWorkspaceSave()
+        }
+        pendingSaveWork = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.saveDebounceInterval,
+            execute: work
+        )
+    }
+
+    func flushPendingSave() {
+        guard let work = pendingSaveWork else { return }
+        work.cancel()
+        pendingSaveWork = nil
+        performWorkspaceSave()
+    }
+
+    private func performWorkspaceSave() {
         let snapshots = WorkspaceRestorer.snapshotAll(
             workspaceRoots: workspaceRoots,
             focusedAreaID: focusedAreaID
@@ -576,7 +603,7 @@ final class AppState {
               let tabID = area.activeTabID
         else { return }
         area.togglePin(tabID)
-        saveWorkspaces()
+        scheduleSaveWorkspaces()
     }
 
     func dispatch(_ action: Action) {
@@ -655,7 +682,7 @@ final class AppState {
             TerminalProgressStore.shared.clearCompletion(for: activePaneID)
         }
 
-        saveWorkspaces()
+        scheduleSaveWorkspaces()
         saveSelection()
     }
 

@@ -12,6 +12,8 @@ struct OpenerOverlay: View {
     @State private var enabledCategories: Set<OpenerCategory> = OpenerPreferences.enabledCategories
     @State private var highlightedIndex: Int? = 0
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private var filteredItems: [OpenerItem] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         let scoped = items.filter { enabledCategories.contains($0.category) }
@@ -36,7 +38,7 @@ struct OpenerOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            backdrop
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
 
@@ -45,17 +47,20 @@ struct OpenerOverlay: View {
                 Divider().overlay(MuxyTheme.border)
                 categoryChips
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(560), height: UIMetrics.scaled(460))
-            .background(MuxyTheme.bg)
+            .muxyGlass(in: RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape) { onDismiss() }
         }
+        .onExitCommand(perform: onDismiss)
         .onAppear {
             highlightedIndex = displayList.isEmpty ? nil : 0
         }
@@ -68,6 +73,41 @@ struct OpenerOverlay: View {
         }
         .onChange(of: items.count) {
             highlightedIndex = displayList.isEmpty ? nil : 0
+        }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if reduceTransparency {
+            Color.black.opacity(0.3)
+        } else {
+            Color.black.opacity(0.001).background(.ultraThinMaterial.opacity(0.6))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(MuxyTheme.bg)
+        } else {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(.regularMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !displayList.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text("\(displayList.count) \(displayList.count == 1 ? "result" : "results")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
         }
     }
 
@@ -109,13 +149,7 @@ struct OpenerOverlay: View {
     private var resultsList: some View {
         Group {
             if displayList.isEmpty {
-                VStack {
-                    Spacer()
-                    Text(query.isEmpty ? "No items" : "No matches")
-                        .font(.system(size: UIMetrics.fontBody))
-                        .foregroundStyle(MuxyTheme.fgMuted)
-                    Spacer()
-                }
+                emptyState
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
@@ -127,13 +161,17 @@ struct OpenerOverlay: View {
                                 if let firstOther = firstNonRecentIndex, index == firstOther {
                                     OpenerSectionHeader(title: "All")
                                 }
-                                OpenerRow(
-                                    item: item,
-                                    isHighlighted: index == highlightedIndex,
-                                    isActive: isActive(item)
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture { onSelect(item) }
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    OpenerRow(
+                                        item: item,
+                                        isHighlighted: index == highlightedIndex,
+                                        isActive: isActive(item)
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                                 .id(item.id)
                             }
                         }
@@ -146,6 +184,29 @@ struct OpenerOverlay: View {
             }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if query.isEmpty {
+                Text("No items")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(query)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func toggleCategory(_ category: OpenerCategory) {
@@ -243,7 +304,7 @@ private struct OpenerRow: View {
                 .truncationMode(.middle)
             if case let .worktree(wt) = item, wt.isPrimary {
                 Text("PRIMARY")
-                    .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                    .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                     .tracking(0.5)
                     .foregroundStyle(MuxyTheme.fgDim)
                     .padding(.horizontal, UIMetrics.spacing2)

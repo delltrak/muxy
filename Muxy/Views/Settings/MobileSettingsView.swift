@@ -8,6 +8,8 @@ struct MobileSettingsView: View {
     @State private var portValidationError: String?
     @State private var showFreePortConfirmation = false
 
+    @Environment(\.settingsSearchQuery) private var searchQuery
+
     private var enabledBinding: Binding<Bool> {
         Binding(
             get: { service.isEnabled },
@@ -19,66 +21,12 @@ struct MobileSettingsView: View {
     }
 
     var body: some View {
-        SettingsContainer {
-            SettingsSection(
-                "Mobile",
-                footer: "Muxy listens on the configured port for the iOS app over your local network or a private VPN such as Tailscale."
-            ) {
-                SettingsToggleRow(label: "Allow mobile device connections", isOn: enabledBinding)
-
-                SettingsRow("Port") {
-                    TextField("\(MobileServerService.defaultPort)", text: $portText)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: SettingsMetrics.labelFontSize, design: .monospaced))
-                        .frame(width: SettingsMetrics.controlWidth)
-                        .onChange(of: portText) { _, _ in
-                            guard portText != String(service.port) else { return }
-                            portValidationError = nil
-                            if service.isEnabled {
-                                service.setEnabled(false)
-                            }
-                        }
-                        .onSubmit { _ = commitPort() }
-                }
-
-                if let error = portValidationError ?? service.lastError {
-                    HStack(spacing: 6) {
-                        Text(error)
-                            .font(.system(size: SettingsMetrics.footnoteFontSize))
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if service.isPortInUse {
-                            Button("Free Port") {
-                                showFreePortConfirmation = true
-                            }
-                            .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium))
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(MuxyTheme.accent)
-                        }
-                    }
-                    .padding(.horizontal, SettingsMetrics.horizontalPadding)
-                    .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-                }
-            }
-
-            SettingsSection(
-                "Approved Devices",
-                footer: "Revoking removes the device's access. It will need to request approval again to reconnect.",
-                showsDivider: false
-            ) {
-                if devices.devices.isEmpty {
-                    Text("No devices approved yet.")
-                        .font(.system(size: SettingsMetrics.labelFontSize))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-                        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-                } else {
-                    ForEach(devices.devices) { device in
-                        deviceRow(device)
-                    }
-                }
-            }
+        Form {
+            mobileSection
+            approvedDevicesSection
         }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .onAppear { portText = String(service.port) }
         .onChange(of: service.port) { _, newValue in
             let text = String(newValue)
@@ -112,6 +60,89 @@ struct MobileSettingsView: View {
         }
     }
 
+    @ViewBuilder
+    private var mobileSection: some View {
+        if isSectionVisible(["Allow mobile device connections", "Port"], extra: ["mobile", "iphone"]) {
+            Section {
+                SettingsSearchableRow(
+                    "Allow mobile device connections",
+                    keywords: ["mobile", "ios", "iphone"]
+                ) {
+                    Toggle("", isOn: enabledBinding).labelsHidden()
+                }
+
+                SettingsSearchableRow("Port") {
+                    TextField("\(MobileServerService.defaultPort)", text: $portText)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(width: 140)
+                        .onChange(of: portText) { _, _ in
+                            guard portText != String(service.port) else { return }
+                            portValidationError = nil
+                            if service.isEnabled {
+                                service.setEnabled(false)
+                            }
+                        }
+                        .onSubmit { _ = commitPort() }
+                }
+
+                if let error = portValidationError ?? service.lastError {
+                    HStack(spacing: 6) {
+                        Text(error)
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if service.isPortInUse {
+                            Button("Free Port") {
+                                showFreePortConfirmation = true
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Mobile")
+            } footer: {
+                Text(
+                    "Muxy listens on the configured port for the iOS app over your local "
+                        + "network or a private VPN such as Tailscale."
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var approvedDevicesSection: some View {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        let visibleDevices: [ApprovedDevice] = {
+            guard !trimmed.isEmpty else { return devices.devices }
+            return devices.devices.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        }()
+
+        let sectionMatches = trimmed.isEmpty
+            || "Approved Devices".localizedCaseInsensitiveContains(trimmed)
+            || !visibleDevices.isEmpty
+
+        if sectionMatches {
+            Section {
+                if devices.devices.isEmpty {
+                    Text("No devices approved yet.")
+                        .foregroundStyle(.secondary)
+                } else if visibleDevices.isEmpty {
+                    Text("No devices match your search.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(visibleDevices) { device in
+                        deviceRow(device)
+                    }
+                }
+            } header: {
+                Text("Approved Devices")
+            } footer: {
+                Text("Revoking removes the device's access. It will need to request approval again to reconnect.")
+            }
+        }
+    }
+
     private func commitPort() -> Bool {
         let trimmed = portText.trimmingCharacters(in: .whitespaces)
         guard let value = UInt16(trimmed), MobileServerService.isValid(port: value) else {
@@ -125,24 +156,18 @@ struct MobileSettingsView: View {
     }
 
     private func deviceRow(_ device: ApprovedDevice) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(device.name)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                Text(lastSeenText(device))
-                    .font(.system(size: SettingsMetrics.footnoteFontSize))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        LabeledContent {
             Button("Revoke", role: .destructive) {
                 deviceToRevoke = device
             }
-            .buttonStyle(.borderless)
-            .font(.system(size: SettingsMetrics.footnoteFontSize))
-            .foregroundStyle(.red)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(device.name)
+                Text(lastSeenText(device))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
     }
 
     private func lastSeenText(_ device: ApprovedDevice) -> String {
@@ -152,5 +177,12 @@ struct MobileSettingsView: View {
             return "Last seen \(formatter.localizedString(for: seen, relativeTo: Date()))"
         }
         return "Approved \(formatter.localizedString(for: device.approvedAt, relativeTo: Date()))"
+    }
+
+    private func isSectionVisible(_ labels: [String], extra: [String] = []) -> Bool {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        let haystack = labels + extra
+        return haystack.contains { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 }

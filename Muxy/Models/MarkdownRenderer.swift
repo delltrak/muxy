@@ -91,8 +91,35 @@ enum MarkdownRenderer {
         let fontScale: CGFloat
     }
 
+    private struct HTMLCacheKey: Hashable {
+        let filePath: String?
+    }
+
+    @MainActor
+    private static var htmlCache: [HTMLCacheKey: String] = [:]
+    @MainActor
+    private static var htmlCacheKeys: [HTMLCacheKey] = []
+    private static let htmlCacheCapacity = 8
+
     @MainActor
     static func html(filePath: String?) -> String {
+        let key = HTMLCacheKey(filePath: filePath)
+        if let cached = htmlCache[key] {
+            return cached
+        }
+        let value = renderHTML(filePath: filePath)
+        htmlCache[key] = value
+        htmlCacheKeys.removeAll { $0 == key }
+        htmlCacheKeys.append(key)
+        if htmlCacheKeys.count > htmlCacheCapacity {
+            let evicted = htmlCacheKeys.removeFirst()
+            htmlCache.removeValue(forKey: evicted)
+        }
+        return value
+    }
+
+    @MainActor
+    private static func renderHTML(filePath: String?) -> String {
         let title = escapeForHTML(filePath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "Markdown")
         let imageBaseHost = filePath.flatMap { encodedImageBaseHost(forMarkdownFilePath: $0) } ?? ""
         return """

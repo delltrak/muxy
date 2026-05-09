@@ -15,9 +15,15 @@ protocol GhosttyRuntimeEventHandling {
 }
 
 final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
+    @MainActor private static var lastTitleByView: [ObjectIdentifier: String] = [:]
+    @MainActor private static var lastPWDByView: [ObjectIdentifier: String] = [:]
+    @MainActor private static var lastHasLinkByView: [ObjectIdentifier: Bool] = [:]
+
     func wakeup() {
-        DispatchQueue.main.async {
-            GhosttyService.shared.tick()
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                GhosttyService.shared.tick()
+            }
         }
     }
 
@@ -62,12 +68,25 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
         }
     }
 
+    private static func runOnMain(_ block: @escaping @Sendable () -> Void) {
+        if Thread.isMainThread {
+            block()
+            return
+        }
+        DispatchQueue.main.async(execute: block)
+    }
+
     private func handleSetTitle(target: ghostty_target_s, title: ghostty_action_set_title_s) {
         guard let view = surfaceView(from: target) else { return }
         guard let titlePtr = title.title else { return }
         let titleString = String(cString: titlePtr)
-        DispatchQueue.main.async {
-            view.onTitleChange?(titleString)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                let key = ObjectIdentifier(view)
+                guard Self.lastTitleByView[key] != titleString else { return }
+                Self.lastTitleByView[key] = titleString
+                view.onTitleChange?(titleString)
+            }
         }
     }
 
@@ -76,8 +95,13 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
         guard let pwdPtr = pwd.pwd else { return }
         let path = String(cString: pwdPtr)
         logger.debug("PWD changed: \(path)")
-        DispatchQueue.main.async {
-            view.onWorkingDirectoryChange?(path)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                let key = ObjectIdentifier(view)
+                guard Self.lastPWDByView[key] != path else { return }
+                Self.lastPWDByView[key] = path
+                view.onWorkingDirectoryChange?(path)
+            }
         }
     }
 
@@ -122,10 +146,12 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
     func closeSurface(userdata: UnsafeMutableRawPointer?, needsConfirm: Bool) {
         guard let userdata else { return }
         let view = Unmanaged<GhosttyTerminalNSView>.fromOpaque(userdata).takeUnretainedValue()
-        DispatchQueue.main.async {
-            guard !view.processExitHandled else { return }
-            view.processExitHandled = true
-            view.onProcessExit?()
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                guard !view.processExitHandled else { return }
+                view.processExitHandled = true
+                view.onProcessExit?()
+            }
         }
     }
 
@@ -144,50 +170,65 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
     private func handleMouseOverLink(target: ghostty_target_s, link: ghostty_action_mouse_over_link_s) {
         guard let view = surfaceView(from: target) else { return }
         let hasLink = link.len > 0 && link.url != nil
-        DispatchQueue.main.async {
-            view.hasOSC8LinkUnderCursor = hasLink
-            view.refreshCmdHoverCursor()
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                let key = ObjectIdentifier(view)
+                guard Self.lastHasLinkByView[key] != hasLink else { return }
+                Self.lastHasLinkByView[key] = hasLink
+                view.hasOSC8LinkUnderCursor = hasLink
+                view.refreshCmdHoverCursor()
+            }
         }
     }
 
     private func handleCommandExit(target: ghostty_target_s) {
         guard let view = surfaceView(from: target) else { return }
-        DispatchQueue.main.async {
-            guard view.closesOnCommandExit else { return }
-            guard !view.processExitHandled else { return }
-            view.processExitHandled = true
-            view.onProcessExit?()
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                guard view.closesOnCommandExit else { return }
+                guard !view.processExitHandled else { return }
+                view.processExitHandled = true
+                view.onProcessExit?()
+            }
         }
     }
 
     private func handleStartSearch(target: ghostty_target_s, search: ghostty_action_start_search_s) {
         guard let view = surfaceView(from: target) else { return }
         let needle = search.needle.flatMap { String(cString: $0) }
-        DispatchQueue.main.async {
-            view.onSearchStart?(needle)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                view.onSearchStart?(needle)
+            }
         }
     }
 
     private func handleEndSearch(target: ghostty_target_s) {
         guard let view = surfaceView(from: target) else { return }
-        DispatchQueue.main.async {
-            view.onSearchEnd?()
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                view.onSearchEnd?()
+            }
         }
     }
 
     private func handleSearchTotal(target: ghostty_target_s, total: ghostty_action_search_total_s) {
         guard let view = surfaceView(from: target) else { return }
         let value = total.total >= 0 ? Int(total.total) : nil
-        DispatchQueue.main.async {
-            view.onSearchTotal?(value)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                view.onSearchTotal?(value)
+            }
         }
     }
 
     private func handleProgressReport(target: ghostty_target_s, report: ghostty_action_progress_report_s) {
         guard let view = surfaceView(from: target) else { return }
         let progress = Self.makeProgress(from: report)
-        DispatchQueue.main.async {
-            view.onProgressReport?(progress)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                view.onProgressReport?(progress)
+            }
         }
     }
 
@@ -212,8 +253,10 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
     private func handleSearchSelected(target: ghostty_target_s, selected: ghostty_action_search_selected_s) {
         guard let view = surfaceView(from: target) else { return }
         let value = selected.selected >= 0 ? Int(selected.selected) : nil
-        DispatchQueue.main.async {
-            view.onSearchSelected?(value)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                view.onSearchSelected?(value)
+            }
         }
     }
 
@@ -229,9 +272,19 @@ final class GhosttyRuntimeEventAdapter: GhosttyRuntimeEventHandling {
         let title = rawTitle.isEmpty ? "Command executed!" : rawTitle
         let body = notification.body.flatMap { String(cString: $0) } ?? ""
         logger.debug("OSC notification: title=\(title) body=\(body)")
-        Task { @MainActor in
-            Self.dispatchOSCNotification(view: view, title: title, body: body)
+        Self.runOnMain {
+            MainActor.assumeIsolated {
+                Self.dispatchOSCNotification(view: view, title: title, body: body)
+            }
         }
+    }
+
+    @MainActor
+    static func clearCache(for view: GhosttyTerminalNSView) {
+        let key = ObjectIdentifier(view)
+        lastTitleByView.removeValue(forKey: key)
+        lastPWDByView.removeValue(forKey: key)
+        lastHasLinkByView.removeValue(forKey: key)
     }
 
     @MainActor

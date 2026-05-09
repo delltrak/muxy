@@ -18,17 +18,29 @@ struct EmptyProjectPlaceholder: View {
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: UIMetrics.scaled(360))
-            Button(action: onCreateTab) {
-                HStack(spacing: UIMetrics.spacing4) {
-                    Text("New Tab")
-                    Text(KeyBindingStore.shared.combo(for: .newTab).displayString)
-                        .font(.system(size: UIMetrics.fontFootnote, weight: .medium, design: .rounded))
-                        .opacity(0.72)
-                }
-            }
-            .buttonStyle(.borderedProminent)
+            actionButton
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        if #available(macOS 26.0, *) {
+            Button(action: onCreateTab) { actionButtonLabel }
+                .buttonStyle(.glassProminent)
+        } else {
+            Button(action: onCreateTab) { actionButtonLabel }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var actionButtonLabel: some View {
+        HStack(spacing: UIMetrics.spacing4) {
+            Text("New Tab")
+            Text(KeyBindingStore.shared.combo(for: .newTab).displayString)
+                .font(.system(size: UIMetrics.fontFootnote, weight: .medium, design: .rounded))
+                .opacity(0.72)
+        }
     }
 }

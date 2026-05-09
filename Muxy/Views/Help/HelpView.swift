@@ -8,7 +8,7 @@ enum HelpSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
         case .welcome: "Welcome"
         case .shortcuts: "Keyboard Shortcuts"
@@ -33,8 +33,12 @@ struct HelpView: View {
     var body: some View {
         NavigationSplitView {
             List(HelpSection.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.systemImage)
-                    .tag(section)
+                Label {
+                    Text(section.title)
+                } icon: {
+                    Image(systemName: section.systemImage)
+                }
+                .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
         } detail: {

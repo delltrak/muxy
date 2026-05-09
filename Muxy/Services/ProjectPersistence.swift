@@ -17,6 +17,6 @@ final class FileProjectPersistence: ProjectPersisting {
     }
 
     func saveProjects(_ projects: [Project]) throws {
-        try store.save(projects)
+        store.saveAsync(projects)
     }
 }

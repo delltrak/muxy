@@ -1,18 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// A generic command-palette overlay with a search field, a scrollable
-/// results list, and keyboard navigation. Used by Quick Open (files) and
-/// the Worktree Switcher.
-struct PaletteOverlay<Item: Identifiable & Sendable>: View {
+struct PaletteOverlay<Item: Identifiable & Sendable, RowContent: View>: View {
     let placeholder: String
     let emptyLabel: String
     let noMatchLabel: String
-    /// Provides items for a given query. Called on every query change.
     let search: (String) async -> [Item]
     let onSelect: (Item) -> Void
     let onDismiss: () -> Void
-    let row: (Item, Bool) -> AnyView
+    @ViewBuilder let row: (Item, Bool) -> RowContent
 
     @State private var query = ""
     @State private var results: [Item] = []
@@ -20,31 +16,74 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            backdrop
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
 
             VStack(spacing: 0) {
                 searchField
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(500), height: UIMetrics.scaled(380))
-            .background(MuxyTheme.bg)
+            .muxyGlass(in: RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape) { onDismiss() }
         }
+        .onExitCommand(perform: onDismiss)
         .onAppear {
             performSearch(debounce: false)
         }
         .onDisappear {
             searchTask?.cancel()
+        }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if reduceTransparency {
+            Color.black.opacity(0.3)
+        } else {
+            Color.black.opacity(0.001).background(.ultraThinMaterial.opacity(0.6))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(MuxyTheme.bg)
+        } else {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(.regularMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !results.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text("\(results.count) \(results.count == 1 ? "result" : "results")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+                if isSearching {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
         }
     }
 
@@ -62,6 +101,9 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
                 onArrowUp: { moveHighlight(-1) },
                 onArrowDown: { moveHighlight(1) }
             )
+            if isSearching, results.isEmpty {
+                ProgressView().controlSize(.small)
+            }
         }
         .padding(.horizontal, UIMetrics.spacing6)
         .padding(.vertical, UIMetrics.spacing5)
@@ -73,22 +115,20 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
     private var resultsList: some View {
         Group {
             if results.isEmpty, !isSearching {
-                VStack {
-                    Spacer()
-                    Text(query.isEmpty ? emptyLabel : noMatchLabel)
-                        .font(.system(size: UIMetrics.fontBody))
-                        .foregroundStyle(MuxyTheme.fgMuted)
-                    Spacer()
-                }
+                emptyState
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                                row(item, index == highlightedIndex)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onSelect(item) }
-                                    .id(item.id)
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    row(item, index == highlightedIndex)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(item.id)
                             }
                         }
                     }
@@ -100,6 +140,29 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
             }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if query.isEmpty {
+                Text(emptyLabel)
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(query)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func performSearch(debounce: Bool = true) {

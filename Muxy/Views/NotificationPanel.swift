@@ -22,6 +22,8 @@ struct NotificationPanelItem: Identifiable {
 struct NotificationPanel: View {
     @Environment(AppState.self) private var appState
     let onDismiss: () -> Void
+    @ScaledMetric(relativeTo: .body) private var panelWidth: CGFloat = 320
+    @ScaledMetric(relativeTo: .body) private var panelHeight: CGFloat = 400
 
     private var items: [NotificationPanelItem] {
         let store = NotificationStore.shared
@@ -50,7 +52,7 @@ struct NotificationPanel: View {
                 notificationList(currentItems)
             }
         }
-        .frame(width: UIMetrics.scaled(320), height: UIMetrics.scaled(400))
+        .frame(width: panelWidth, height: panelHeight)
     }
 
     private var header: some View {
@@ -76,19 +78,22 @@ struct NotificationPanel: View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(currentItems) { item in
-                    NotificationRow(item: item, isHighlighted: false, onRemove: {
-                        NotificationStore.shared.remove(item.id)
-                    })
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectItem(item) }
+                    Button {
+                        selectItem(item)
+                    } label: {
+                        NotificationRow(item: item, isHighlighted: false, onRemove: {
+                            NotificationStore.shared.remove(item.id)
+                        })
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(notificationAccessibilityLabel(for: item))
-                    .accessibilityAddTraits(.isButton)
                 }
             }
             .padding(.vertical, UIMetrics.spacing2)
         }
-        .background(MuxyTheme.bg)
+        .muxyGlass(.tinted(MuxyTheme.accent.opacity(0.05)), in: Rectangle())
     }
 
     private var emptyState: some View {
@@ -116,7 +121,7 @@ struct NotificationPanel: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .background(MuxyTheme.bg)
+        .muxyGlass(.tinted(MuxyTheme.accent.opacity(0.05)), in: Rectangle())
     }
 
     private func notificationAccessibilityLabel(for item: NotificationPanelItem) -> String {
@@ -189,12 +194,12 @@ private struct NotificationRow: View {
             onRemove()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .frame(width: UIMetrics.iconMD, height: UIMetrics.iconMD)
                 .background(MuxyTheme.surface, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Dismiss Notification")
+        .accessibilityLabel(Text("Dismiss Notification"))
     }
 }

@@ -11,28 +11,78 @@ struct FindInFilesOverlay: View {
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var totalMatchCount: Int {
+        groups.reduce(0) { $0 + $1.matches.count }
+    }
+
+    private var matchSummary: String {
+        let resultLabel = totalMatchCount == 1 ? "result" : "results"
+        let fileLabel = groups.count == 1 ? "file" : "files"
+        return "\(totalMatchCount) \(resultLabel) in \(groups.count) \(fileLabel)"
+    }
+
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            backdrop
                 .ignoresSafeArea()
                 .onTapGesture { onDismiss() }
 
             VStack(spacing: 0) {
                 searchField
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(640), height: UIMetrics.scaled(460))
-            .background(MuxyTheme.bg)
+            .muxyGlass(in: RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusXL))
             .overlay(RoundedRectangle(cornerRadius: UIMetrics.radiusXL).stroke(MuxyTheme.border, lineWidth: 1))
             .shadow(color: .black.opacity(0.4), radius: UIMetrics.scaled(20), y: UIMetrics.scaled(8))
             .padding(.top, UIMetrics.scaled(60))
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape) { onDismiss() }
         }
+        .onExitCommand(perform: onDismiss)
         .onAppear { performSearch(debounce: false) }
         .onDisappear { searchTask?.cancel() }
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if reduceTransparency {
+            Color.black.opacity(0.3)
+        } else {
+            Color.black.opacity(0.001).background(.ultraThinMaterial.opacity(0.6))
+        }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(MuxyTheme.bg)
+        } else {
+            RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
+                .fill(.regularMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !groups.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text(matchSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
+        }
     }
 
     private var searchField: some View {
@@ -49,6 +99,9 @@ struct FindInFilesOverlay: View {
                 onArrowUp: { moveHighlight(-1) },
                 onArrowDown: { moveHighlight(1) }
             )
+            if isSearching {
+                ProgressView().controlSize(.small)
+            }
         }
         .padding(.horizontal, UIMetrics.spacing6)
         .padding(.vertical, UIMetrics.spacing5)
@@ -58,16 +111,8 @@ struct FindInFilesOverlay: View {
     @ViewBuilder
     private var resultsList: some View {
         if groups.isEmpty, !isSearching {
-            VStack {
-                Spacer()
-                Text(query.trimmingCharacters(in: .whitespaces).count < TextSearchService.minQueryLength
-                    ? "Type at least \(TextSearchService.minQueryLength) characters"
-                    : "No matches found")
-                    .font(.system(size: UIMetrics.fontBody))
-                    .foregroundStyle(MuxyTheme.fgMuted)
-                Spacer()
-            }
-            .frame(maxHeight: .infinity)
+            emptyState
+                .frame(maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
@@ -75,12 +120,16 @@ struct FindInFilesOverlay: View {
                         ForEach(groups) { group in
                             FileGroupHeader(group: group)
                             ForEach(group.matches) { match in
-                                MatchRow(
-                                    match: match,
-                                    isHighlighted: match.id == highlightedMatchID
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture { onSelect(match) }
+                                Button {
+                                    onSelect(match)
+                                } label: {
+                                    MatchRow(
+                                        match: match,
+                                        isHighlighted: match.id == highlightedMatchID
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                                 .id(match.id)
                             }
                         }
@@ -95,6 +144,31 @@ struct FindInFilesOverlay: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if trimmed.count < TextSearchService.minQueryLength {
+                Text("Type at least \(TextSearchService.minQueryLength) characters")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(query)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func performSearch(debounce: Bool = true) {

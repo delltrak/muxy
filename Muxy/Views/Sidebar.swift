@@ -30,10 +30,13 @@ struct Sidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(ProjectStore.self) private var projectStore
     @Environment(WorktreeStore.self) private var worktreeStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragState = ProjectDragState()
     @State private var expanded = UserDefaults.standard.bool(forKey: "muxy.sidebarExpanded")
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var expandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
+    @ScaledMetric(relativeTo: .body) private var collapsedWidth: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var expandedWidth: CGFloat = 220
 
     private var collapsedStyle: SidebarCollapsedStyle {
         SidebarCollapsedStyle(rawValue: collapsedStyleRaw) ?? .defaultValue
@@ -61,7 +64,7 @@ struct Sidebar: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .frame(width: isHidden ? 0 : (isWide ? SidebarLayout.expandedWidth : SidebarLayout.collapsedWidth))
+        .frame(width: isHidden ? 0 : (isWide ? expandedWidth : collapsedWidth))
         .opacity(isHidden ? 0 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sidebar")
@@ -71,7 +74,7 @@ struct Sidebar: View {
     }
 
     private func toggleExpanded() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
             expanded.toggle()
         }
         UserDefaults.standard.set(expanded, forKey: "muxy.sidebarExpanded")
@@ -89,13 +92,24 @@ struct Sidebar: View {
     }
 
     private var projectList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        let notificationStore = NotificationStore.shared
+        let progressStore = TerminalProgressStore.shared
+        return ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: UIMetrics.spacing2) {
                 ForEach(Array(projectStore.projects.enumerated()), id: \.element.id) { index, project in
+                    let metadata = ProjectRowMetadata(
+                        unreadCount: notificationStore.unreadCount(for: project.id),
+                        hasCompletionPending: progressStore.hasCompletionPending(for: project.id)
+                    )
                     Group {
                         if isWide {
                             ExpandedProjectRow(
                                 project: project,
+                                metadata: metadata,
+                                worktreeUnreadCounts: worktreeUnreadCounts(
+                                    for: project.id,
+                                    notificationStore: notificationStore
+                                ),
                                 shortcutIndex: index < 9 ? index + 1 : nil,
                                 isAnyDragging: dragState.draggedID != nil,
                                 onSelect: { select(project) },
@@ -107,6 +121,7 @@ struct Sidebar: View {
                         } else {
                             ProjectRow(
                                 project: project,
+                                metadata: metadata,
                                 shortcutIndex: index < 9 ? index + 1 : nil,
                                 isAnyDragging: dragState.draggedID != nil,
                                 onSelect: { select(project) },
@@ -145,6 +160,17 @@ struct Sidebar: View {
         "\(name) (\(KeyBindingStore.shared.combo(for: action).displayString))"
     }
 
+    private func worktreeUnreadCounts(
+        for projectID: UUID,
+        notificationStore: NotificationStore
+    ) -> [UUID: Int] {
+        var result: [UUID: Int] = [:]
+        for worktree in worktreeStore.list(for: projectID) {
+            result[worktree.id] = notificationStore.unreadCount(for: projectID, worktreeID: worktree.id)
+        }
+        return result
+    }
+
     private func projectDragGesture(for project: Project) -> some Gesture {
         DragGesture(minimumDistance: 6, coordinateSpace: .named("sidebar"))
             .onChanged { value in
@@ -155,7 +181,7 @@ struct Sidebar: View {
                 reorderIfNeeded(at: value.location)
             }
             .onEnded { _ in
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                     dragState.draggedID = nil
                     dragState.frames = [:]
                     dragState.lastReorderTargetID = nil
@@ -199,7 +225,7 @@ struct Sidebar: View {
 
             dragState.lastReorderTargetID = id
             let offset = destIndex > sourceIndex ? destIndex + 1 : destIndex
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                 projectStore.reorder(
                     fromOffsets: IndexSet(integer: sourceIndex), toOffset: offset
                 )
@@ -217,6 +243,20 @@ private struct ProjectDragState {
     var draggedID: UUID?
     var frames: [UUID: CGRect] = [:]
     var lastReorderTargetID: UUID?
+}
+
+private struct SidebarFooterContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: UIMetrics.spacing2) {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
 }
 
 private struct AddProjectButton: View {
@@ -381,42 +421,41 @@ struct SidebarFooter: View {
     }
 
     private var collapsedFooter: some View {
-        VStack(spacing: UIMetrics.spacing2) {
-            if usageEnabled {
-                aiUsageButton
-            }
-            IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                .help("Notifications")
-                .popover(isPresented: $showNotifications) {
-                    NotificationPanel(onDismiss: { showNotifications = false })
+        SidebarFooterContainer {
+            VStack(spacing: UIMetrics.spacing2) {
+                if usageEnabled {
+                    aiUsageButton
                 }
-            IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
-            IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
+                IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
+                    .help("Notifications")
+                    .popover(isPresented: $showNotifications) {
+                        NotificationPanel(onDismiss: { showNotifications = false })
+                    }
+                IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
+                    .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
+                    .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
+            }
         }
         .padding(.bottom, UIMetrics.spacing4)
     }
 
     private var expandedFooter: some View {
-        HStack(spacing: UIMetrics.spacing2) {
-            IconButton(symbol: sidebarToggleIcon, accessibilityLabel: sidebarToggleLabel) { postToggleSidebar() }
-                .help("\(sidebarToggleLabel) (\(KeyBindingStore.shared.combo(for: .toggleSidebar).displayString))")
+        SidebarFooterContainer {
+            HStack(spacing: UIMetrics.spacing2) {
+                Spacer()
 
-            Spacer()
-
-            if usageEnabled {
-                aiUsageButton
-            }
-            IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                .help("Notifications")
-                .popover(isPresented: $showNotifications) {
-                    NotificationPanel(onDismiss: { showNotifications = false })
+                if usageEnabled {
+                    aiUsageButton
                 }
-            IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
+                IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
+                    .help("Notifications")
+                    .popover(isPresented: $showNotifications) {
+                        NotificationPanel(onDismiss: { showNotifications = false })
+                    }
+                IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
+                    .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
+                    .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
+            }
         }
         .padding(.horizontal, UIMetrics.spacing5)
         .padding(.bottom, UIMetrics.spacing4)

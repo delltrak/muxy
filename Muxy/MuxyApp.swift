@@ -56,7 +56,7 @@ struct MuxyApp: App {
                     NotificationStore.shared.markAllAsRead()
                     TerminalProgressStore.shared.appState = appState
                     appDelegate.onTerminate = { [appState] in
-                        appState.saveWorkspaces()
+                        appState.flushPendingSave()
                     }
                     appDelegate.hasUnsavedEditorTabs = { [appState] in
                         appState.unsavedEditorTabs()
@@ -147,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var pendingOpenPaths: [String] = []
     private var systemAppearanceObserver: NSObjectProtocol?
+    private var didBecomeActiveObserver: NSObjectProtocol?
+    private var didResignActiveObserver: NSObjectProtocol?
 
     @MainActor
     func handleOpenProjectPath(_ path: String) {
@@ -228,6 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ThemeService.shared.applyDefaultThemeIfNeeded()
         ThemeService.shared.migrateToPairedThemeIfNeeded()
         observeSystemAppearanceChanges()
+        observeApplicationFocusChanges()
         UpdateService.shared.start()
         ModifierKeyMonitor.shared.start()
         NotificationSocketServer.shared.start()
@@ -235,6 +238,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = AIUsageSettingsStore.isUsageEnabled()
 
         consumeLaunchArguments()
+    }
+
+    @MainActor
+    private func observeApplicationFocusChanges() {
+        if let didBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(didBecomeActiveObserver)
+        }
+        if let didResignActiveObserver {
+            NotificationCenter.default.removeObserver(didResignActiveObserver)
+        }
+        didBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                GhosttyService.shared.setAppFocused(true)
+            }
+        }
+        didResignActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated {
+                GhosttyService.shared.setAppFocused(false)
+            }
+        }
     }
 
     @MainActor
@@ -337,6 +368,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DistributedNotificationCenter.default().removeObserver(observer)
             systemAppearanceObserver = nil
         }
+        if let didBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(didBecomeActiveObserver)
+            self.didBecomeActiveObserver = nil
+        }
+        if let didResignActiveObserver {
+            NotificationCenter.default.removeObserver(didResignActiveObserver)
+            self.didResignActiveObserver = nil
+        }
         onTerminate?()
         NotificationStore.shared.saveToDisk()
         NotificationSocketServer.shared.stop()
@@ -344,6 +383,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MobileServerService.shared.stopForTermination()
             RichInputDraftStore.shared.flush()
         }
+        CodableFileStorePersistence.flush()
     }
 
     @MainActor

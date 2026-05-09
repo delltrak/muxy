@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import Muxy
@@ -42,5 +43,23 @@ struct UIScaleTests {
             let decoded = try JSONDecoder().decode(UIScale.Preset.self, from: data)
             #expect(decoded == preset)
         }
+    }
+
+    @Test("Dynamic Type multiplier is monotonic across all sizes")
+    func dynamicTypeMultiplierIsMonotonic() {
+        let ordered: [DynamicTypeSize] = [
+            .xSmall, .small, .medium, .large, .xLarge, .xxLarge, .xxxLarge,
+            .accessibility1, .accessibility2, .accessibility3, .accessibility4, .accessibility5,
+        ]
+        let multipliers = ordered.map { UIScale.dynamicTypeMultiplier($0) }
+        #expect(multipliers == multipliers.sorted())
+        #expect(UIScale.dynamicTypeMultiplier(.medium) == 1.0)
+    }
+
+    @Test("Combined preset and Dynamic Type multiplier compounds")
+    func combinedMultiplierCompounds() {
+        let combined = UIScale.multiplier(for: .large, dynamicType: .xLarge)
+        let expected = UIScale.Preset.large.multiplier * UIScale.dynamicTypeMultiplier(.xLarge)
+        #expect(combined == expected)
     }
 }

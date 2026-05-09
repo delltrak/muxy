@@ -1,6 +1,6 @@
 import Foundation
 
-protocol WorktreePersisting {
+protocol WorktreePersisting: Sendable {
     func loadWorktrees(projectID: UUID) throws -> [Worktree]
     func saveWorktrees(_ worktrees: [Worktree], projectID: UUID) throws
     func removeWorktrees(projectID: UUID) throws
@@ -23,7 +23,7 @@ final class FileWorktreePersistence: WorktreePersisting {
     }
 
     func saveWorktrees(_ worktrees: [Worktree], projectID: UUID) throws {
-        try store(for: projectID).save(worktrees)
+        store(for: projectID).saveAsync(worktrees)
     }
 
     func removeWorktrees(projectID: UUID) throws {
@@ -32,8 +32,7 @@ final class FileWorktreePersistence: WorktreePersisting {
 
     private func store(for projectID: UUID) -> CodableFileStore<[Worktree]> {
         CodableFileStore(
-            fileURL: directory.appendingPathComponent("\(projectID.uuidString).json"),
-            options: .pretty
+            fileURL: directory.appendingPathComponent("\(projectID.uuidString).json")
         )
     }
 }

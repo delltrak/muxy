@@ -32,9 +32,15 @@ final class MarkdownRemoteImageSchemeHandler: NSObject, WKURLSchemeHandler {
     static let scheme = "muxy-md-remote"
 
     private static let maxImageBytes: Int = 50 * 1024 * 1024
+    private static let maxCacheBytes: Int = 256 * 1024 * 1024
     private static let cacheDirectoryName = "MarkdownImageCache"
     private static let allowedMIMEPrefixes: [String] = ["image/"]
     private static let userAgent = "Muxy/1.0 (Markdown Preview)"
+
+    override init() {
+        super.init()
+        Self.pruneIfNeeded()
+    }
 
     private static let urlSession: URLSession = {
         let config = URLSessionConfiguration.default
@@ -257,6 +263,46 @@ final class MarkdownRemoteImageSchemeHandler: NSObject, WKURLSchemeHandler {
         guard let urls = cacheURLs(for: url) else { return }
         try? data.write(to: urls.data, options: .atomic)
         try? mimeType.write(to: urls.meta, atomically: true, encoding: .utf8)
+        pruneIfNeeded()
+    }
+
+    static func pruneIfNeeded() {
+        guard let directory = cacheDirectory() else { return }
+        let manager = FileManager.default
+        let resourceKeys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
+        guard let enumerator = manager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]
+        )
+        else { return }
+
+        struct Entry {
+            let url: URL
+            let size: Int
+            let mtime: Date
+        }
+
+        var entries: [Entry] = []
+        var totalBytes = 0
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: Set(resourceKeys)),
+                  values.isRegularFile == true,
+                  let size = values.fileSize,
+                  let mtime = values.contentModificationDate
+            else { continue }
+            entries.append(Entry(url: fileURL, size: size, mtime: mtime))
+            totalBytes += size
+        }
+
+        guard totalBytes > maxCacheBytes else { return }
+        entries.sort { $0.mtime < $1.mtime }
+        var bytesToRemove = totalBytes - maxCacheBytes
+        for entry in entries {
+            guard bytesToRemove > 0 else { break }
+            try? manager.removeItem(at: entry.url)
+            bytesToRemove -= entry.size
+        }
     }
 
     private static func resolvedMIMEType(_ mimeType: String, fallbackURL: URL) -> String {
