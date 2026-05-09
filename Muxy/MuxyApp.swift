@@ -56,7 +56,7 @@ struct MuxyApp: App {
                     NotificationStore.shared.markAllAsRead()
                     TerminalProgressStore.shared.appState = appState
                     appDelegate.onTerminate = { [appState] in
-                        appState.saveWorkspaces()
+                        appState.flushPendingSave()
                     }
                     appDelegate.hasUnsavedEditorTabs = { [appState] in
                         appState.unsavedEditorTabs()
@@ -344,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MobileServerService.shared.stopForTermination()
             RichInputDraftStore.shared.flush()
         }
+        CodableFileStorePersistence.flush()
     }
 
     @MainActor

@@ -99,10 +99,6 @@ final class ApprovedDevicesStore {
     }
 
     private func save() {
-        do {
-            try Self.store.save(devices)
-        } catch {
-            logger.error("Failed to save approved devices: \(error)")
-        }
+        Self.store.saveAsync(devices)
     }
 }

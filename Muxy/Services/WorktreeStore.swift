@@ -28,11 +28,14 @@ final class WorktreeStore {
         for project in projects {
             do {
                 var loaded = try persistence.loadWorktrees(projectID: project.id)
+                var didChange = false
                 if !loaded.contains(where: \.isPrimary) {
                     loaded.insert(makePrimary(for: project), at: 0)
-                    try? persistence.saveWorktrees(loaded, projectID: project.id)
+                    didChange = true
                 }
                 setWorktrees(sortPrimaryFirst(loaded), for: project.id)
+                guard didChange else { continue }
+                save(projectID: project.id)
             } catch {
                 logger.error("Failed to load worktrees for project \(project.id): \(error)")
                 setWorktrees([makePrimary(for: project)], for: project.id)
@@ -148,8 +151,11 @@ final class WorktreeStore {
         let sorted = sortPrimaryFirst(list.filter {
             !$0.isExternallyManaged || recordKeys.contains(Self.canonicalPath($0.path))
         })
+        let previous = worktrees[project.id] ?? []
         setWorktrees(sorted, for: project.id)
-        save(projectID: project.id)
+        if previous != sorted {
+            save(projectID: project.id)
+        }
         return sorted
     }
 
