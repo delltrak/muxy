@@ -339,6 +339,7 @@ private struct TabCell: View {
     @State private var completionFlashOn = false
     @State private var flashTask: Task<Void, any Error>?
     @FocusState private var renameFieldFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var tabHeight: CGFloat = 32
     private let progressStore = TerminalProgressStore.shared
 
     private static let springLoadDelay: Duration = .milliseconds(250)
@@ -425,7 +426,7 @@ private struct TabCell: View {
             .padding(.leading, titleHidden ? 0 : UIMetrics.spacing6)
             .padding(.trailing, titleHidden ? 0 : UIMetrics.iconXXL)
             .frame(maxWidth: .infinity, alignment: titleHidden ? .center : .leading)
-            .frame(height: UIMetrics.scaled(32))
+            .frame(height: tabHeight)
             .background {
                 GeometryReader { geo in
                     Color.clear.preference(key: TabWidthPreferenceKey.self, value: geo.size.width)

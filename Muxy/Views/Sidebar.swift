@@ -34,6 +34,8 @@ struct Sidebar: View {
     @State private var expanded = UserDefaults.standard.bool(forKey: "muxy.sidebarExpanded")
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var expandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
+    @ScaledMetric(relativeTo: .body) private var collapsedWidth: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var expandedWidth: CGFloat = 220
 
     private var collapsedStyle: SidebarCollapsedStyle {
         SidebarCollapsedStyle(rawValue: collapsedStyleRaw) ?? .defaultValue
@@ -61,7 +63,7 @@ struct Sidebar: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxHeight: .infinity, alignment: .bottom)
-        .frame(width: isHidden ? 0 : (isWide ? SidebarLayout.expandedWidth : SidebarLayout.collapsedWidth))
+        .frame(width: isHidden ? 0 : (isWide ? expandedWidth : collapsedWidth))
         .opacity(isHidden ? 0 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Sidebar")

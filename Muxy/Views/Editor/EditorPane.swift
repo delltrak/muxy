@@ -412,6 +412,7 @@ private struct EditorMarkdownModePicker: View {
 
 private struct EditorBreadcrumb: View {
     @Bindable var state: EditorTabState
+    @ScaledMetric(relativeTo: .footnote) private var pathFontSize: CGFloat = 11
 
     private var relativePath: String {
         let full = state.filePath
@@ -428,7 +429,7 @@ private struct EditorBreadcrumb: View {
                 .font(.system(size: UIMetrics.fontCaption))
                 .foregroundStyle(MuxyTheme.fgDim)
             Text(relativePath)
-                .font(.system(size: UIMetrics.fontFootnote))
+                .font(.system(size: pathFontSize))
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .lineLimit(1)
                 .truncationMode(.middle)

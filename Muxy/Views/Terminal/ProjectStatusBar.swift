@@ -6,6 +6,7 @@ struct ProjectStatusBar: View {
     let isInteractive: Bool
     let richInputVisible: Bool
     @Binding var richInputFontSize: Double
+    @ScaledMetric(relativeTo: .footnote) private var barHeight: CGFloat = 28
 
     private var richInputShortcutLabel: String {
         KeyBindingStore.shared.combo(for: .toggleRichInput).displayString
@@ -32,7 +33,7 @@ struct ProjectStatusBar: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 28)
+        .frame(height: barHeight)
         .background(MuxyTheme.bg)
         .overlay(
             Rectangle().fill(MuxyTheme.border).frame(height: 1),
