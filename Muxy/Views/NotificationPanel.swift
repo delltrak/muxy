@@ -195,6 +195,6 @@ private struct NotificationRow: View {
                 .background(MuxyTheme.surface, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Dismiss Notification")
+        .accessibilityLabel(Text("Dismiss Notification"))
     }
 }
