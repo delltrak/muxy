@@ -16,11 +16,9 @@ enum GitDiffParser {
         var deletions = 0
 
         for rawLine in patch.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
-            let line = String(rawLine)
-
-            if line.hasPrefix("@@") {
+            if rawLine.hasPrefix("@@") {
                 inHunk = true
-                let (oldStart, newStart) = parseHunkHeader(line)
+                let (oldStart, newStart) = parseHunkHeader(rawLine)
                 oldLineNumber = oldStart
                 newLineNumber = newStart
                 rows.append(DiffDisplayRow(
@@ -29,55 +27,53 @@ enum GitDiffParser {
                     newLineNumber: nil,
                     oldText: nil,
                     newText: nil,
-                    text: line
+                    text: String(rawLine)
                 ))
                 continue
             }
 
             guard inHunk else { continue }
 
-            if line.hasPrefix(" ") {
-                let content = String(line.dropFirst())
+            guard let prefix = rawLine.first else { continue }
+
+            switch prefix {
+            case " ":
+                let content = String(rawLine.dropFirst())
                 rows.append(DiffDisplayRow(
                     kind: .context,
                     oldLineNumber: oldLineNumber,
                     newLineNumber: newLineNumber,
                     oldText: content,
                     newText: content,
-                    text: " \(content)"
+                    text: String(rawLine)
                 ))
                 oldLineNumber += 1
                 newLineNumber += 1
-                continue
-            }
-
-            if line.hasPrefix("-") {
-                let content = String(line.dropFirst())
+            case "-":
+                let content = String(rawLine.dropFirst())
                 rows.append(DiffDisplayRow(
                     kind: .deletion,
                     oldLineNumber: oldLineNumber,
                     newLineNumber: nil,
                     oldText: content,
                     newText: nil,
-                    text: "-\(content)"
+                    text: String(rawLine)
                 ))
                 oldLineNumber += 1
                 deletions += 1
-                continue
-            }
-
-            if line.hasPrefix("+") {
-                let content = String(line.dropFirst())
+            case "+":
+                let content = String(rawLine.dropFirst())
                 rows.append(DiffDisplayRow(
                     kind: .addition,
                     oldLineNumber: nil,
                     newLineNumber: newLineNumber,
                     oldText: nil,
                     newText: content,
-                    text: "+\(content)"
+                    text: String(rawLine)
                 ))
                 newLineNumber += 1
                 additions += 1
+            default:
                 continue
             }
         }
@@ -128,21 +124,23 @@ enum GitDiffParser {
         return output
     }
 
-    static func parseHunkHeader(_ line: String) -> (Int, Int) {
-        let parts = line.split(separator: " ")
+    static func parseHunkHeader(_ line: some StringProtocol) -> (Int, Int) {
+        let parts = line.split(separator: " ", omittingEmptySubsequences: true)
         guard parts.count >= 3 else { return (0, 0) }
 
-        let oldPart = String(parts[1])
-        let newPart = String(parts[2])
-
-        let oldNumber = parseHunkNumber(oldPart)
-        let newNumber = parseHunkNumber(newPart)
+        let oldNumber = parseHunkNumber(parts[1])
+        let newNumber = parseHunkNumber(parts[2])
         return (oldNumber, newNumber)
     }
 
-    static func parseHunkNumber(_ token: String) -> Int {
-        let cleaned = token.trimmingCharacters(in: CharacterSet(charactersIn: "-+,"))
-        guard let start = cleaned.split(separator: ",").first else { return 0 }
+    static func parseHunkNumber(_ token: some StringProtocol) -> Int {
+        var slice = Substring(token)
+        while let first = slice.first, first == "-" || first == "+" || first == "," {
+            slice = slice.dropFirst()
+        }
+        guard let start = slice.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first else {
+            return 0
+        }
         return Int(start) ?? 0
     }
 }
