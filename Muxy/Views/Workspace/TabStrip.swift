@@ -134,6 +134,7 @@ struct PaneTabStrip: View {
                     areaID: areaID,
                     hasUnread: NotificationStore.shared.hasUnread(tabID: tab.id),
                     isAnyDragging: dragState.draggedID != nil,
+                    cellWidth: perTabWidth,
                     shortcutIndex: globalIndex < 9 ? globalIndex + 1 : nil,
                     closableOthersCount: closableOthersCount(excluding: tab.id),
                     closableLeftCount: closableCount(leftOf: index),
@@ -297,13 +298,6 @@ private struct TabDragState {
 
 private typealias TabFramePreferenceKey = UUIDFramePreferenceKey<TabFrameTag>
 
-private struct TabWidthPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 private struct TabCell: View {
     static let minWidth: CGFloat = 44
     static let maxWidth: CGFloat = 200
@@ -315,6 +309,7 @@ private struct TabCell: View {
     let areaID: UUID
     var hasUnread: Bool = false
     var isAnyDragging: Bool = false
+    var cellWidth: CGFloat = TabCell.maxWidth
     var shortcutIndex: Int?
     var closableOthersCount: Int = 0
     var closableLeftCount: Int = 0
@@ -333,7 +328,6 @@ private struct TabCell: View {
     @State private var isRenaming = false
     @State private var renameText = ""
     @State private var showColorPicker = false
-    @State private var measuredWidth: CGFloat = TabCell.maxWidth
     @State private var externalDragOverCell = false
     @State private var springLoadTask: Task<Void, any Error>?
     @State private var completionFlashOn = false
@@ -344,7 +338,7 @@ private struct TabCell: View {
     private static let springLoadDelay: Duration = .milliseconds(250)
 
     private var titleHidden: Bool {
-        measuredWidth < Self.titleHideThreshold
+        cellWidth < Self.titleHideThreshold
     }
 
     private var tabColor: Color? {
@@ -426,12 +420,6 @@ private struct TabCell: View {
             .padding(.trailing, titleHidden ? 0 : UIMetrics.iconXXL)
             .frame(maxWidth: .infinity, alignment: titleHidden ? .center : .leading)
             .frame(height: UIMetrics.scaled(32))
-            .background {
-                GeometryReader { geo in
-                    Color.clear.preference(key: TabWidthPreferenceKey.self, value: geo.size.width)
-                }
-            }
-            .onPreferenceChange(TabWidthPreferenceKey.self) { measuredWidth = $0 }
             .overlay(alignment: titleHidden ? .center : .trailing) {
                 trailingAccessory
                     .padding(.trailing, titleHidden ? 0 : UIMetrics.spacing5)
