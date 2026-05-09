@@ -520,7 +520,6 @@ private struct ExpandedWorktreeRow: View {
         return label
     }
 
-    @ViewBuilder
     private var leadingIndicator: some View {
         ZStack {
             if unreadCount > 0 {
