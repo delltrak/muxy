@@ -13,6 +13,16 @@ struct FindInFilesOverlay: View {
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
+    private var totalMatchCount: Int {
+        groups.reduce(0) { $0 + $1.matches.count }
+    }
+
+    private var matchSummary: String {
+        let resultLabel = totalMatchCount == 1 ? "result" : "results"
+        let fileLabel = groups.count == 1 ? "file" : "files"
+        return "\(totalMatchCount) \(resultLabel) in \(groups.count) \(fileLabel)"
+    }
+
     var body: some View {
         ZStack {
             backdrop
@@ -22,6 +32,7 @@ struct FindInFilesOverlay: View {
             VStack(spacing: 0) {
                 searchField
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(640), height: UIMetrics.scaled(460))
@@ -58,6 +69,21 @@ struct FindInFilesOverlay: View {
         }
     }
 
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !groups.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text(matchSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: UIMetrics.spacing4) {
             Image(systemName: "magnifyingglass")
@@ -72,6 +98,9 @@ struct FindInFilesOverlay: View {
                 onArrowUp: { moveHighlight(-1) },
                 onArrowDown: { moveHighlight(1) }
             )
+            if isSearching {
+                ProgressView().controlSize(.small)
+            }
         }
         .padding(.horizontal, UIMetrics.spacing6)
         .padding(.vertical, UIMetrics.spacing5)

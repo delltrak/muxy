@@ -31,6 +31,7 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
             VStack(spacing: 0) {
                 searchField
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(500), height: UIMetrics.scaled(380))
@@ -71,6 +72,24 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
         }
     }
 
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !results.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text("\(results.count) \(results.count == 1 ? "result" : "results")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+                if isSearching {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: UIMetrics.spacing4) {
             Image(systemName: "magnifyingglass")
@@ -85,6 +104,9 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
                 onArrowUp: { moveHighlight(-1) },
                 onArrowDown: { moveHighlight(1) }
             )
+            if isSearching, results.isEmpty {
+                ProgressView().controlSize(.small)
+            }
         }
         .padding(.horizontal, UIMetrics.spacing6)
         .padding(.vertical, UIMetrics.spacing5)

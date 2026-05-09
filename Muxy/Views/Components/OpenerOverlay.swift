@@ -47,6 +47,7 @@ struct OpenerOverlay: View {
                 Divider().overlay(MuxyTheme.border)
                 categoryChips
                 Divider().overlay(MuxyTheme.border)
+                resultsHeader
                 resultsList
             }
             .frame(width: UIMetrics.scaled(560), height: UIMetrics.scaled(460))
@@ -91,6 +92,21 @@ struct OpenerOverlay: View {
         } else {
             RoundedRectangle(cornerRadius: UIMetrics.radiusXL, style: .continuous)
                 .fill(.regularMaterial)
+        }
+    }
+
+    @ViewBuilder
+    private var resultsHeader: some View {
+        if !displayList.isEmpty {
+            HStack(spacing: UIMetrics.spacing3) {
+                Text("\(displayList.count) \(displayList.count == 1 ? "result" : "results")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Spacer()
+            }
+            .padding(.horizontal, UIMetrics.spacing6)
+            .padding(.vertical, UIMetrics.spacing2)
         }
     }
 
