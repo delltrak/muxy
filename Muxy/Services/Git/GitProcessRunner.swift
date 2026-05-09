@@ -19,12 +19,6 @@ enum GitProcessRunner {
         attributes: .concurrent
     )
 
-    private static let stderrDrainQueue = DispatchQueue(
-        label: "app.muxy.git-stderr-drain",
-        qos: .userInitiated,
-        attributes: .concurrent
-    )
-
     private static let searchPaths = [
         "/opt/homebrew/bin",
         "/usr/local/bin",
@@ -86,13 +80,93 @@ enum GitProcessRunner {
 
     private static func runProcess(_ spec: ProcessSpec) async throws -> GitProcessResult {
         let handle = ProcessHandle()
-        return try await withTaskCancellationHandler {
-            try await dispatch {
-                try runProcessSync(spec, handle: handle)
+        if spec.lineLimit != nil {
+            return try await withTaskCancellationHandler {
+                try await dispatch {
+                    try runProcessSync(spec, handle: handle)
+                }
+            } onCancel: {
+                handle.terminate()
             }
+        }
+        return try await withTaskCancellationHandler {
+            try await runProcessAsync(spec, handle: handle)
         } onCancel: {
             handle.terminate()
         }
+    }
+
+    private static func runProcessAsync(
+        _ spec: ProcessSpec,
+        handle: ProcessHandle
+    ) async throws -> GitProcessResult {
+        let signpostID = GitSignpost.begin(spec.signpostName, spec.arguments.prefix(3).joined(separator: " "))
+        defer { GitSignpost.end(spec.signpostName, signpostID) }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: spec.executable)
+        process.arguments = spec.arguments
+
+        var environment = ProcessInfo.processInfo.environment
+        environment["GIT_OPTIONAL_LOCKS"] = "0"
+        process.environment = environment
+
+        if let workingDirectory = spec.workingDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+        }
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        let stdoutCollector = AsyncDataCollector()
+        let stderrCollector = AsyncDataCollector()
+        stdoutCollector.start(reading: stdoutPipe.fileHandleForReading)
+        stderrCollector.start(reading: stderrPipe.fileHandleForReading)
+
+        let processEnded = ProcessTerminationGate()
+        process.terminationHandler = { _ in
+            processEnded.signal()
+        }
+
+        do {
+            try process.run()
+        } catch {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            throw GitProcessError.launchFailed(error.localizedDescription)
+        }
+
+        guard handle.attach(process) else {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            process.terminate()
+            await processEnded.wait()
+            return GitProcessResult(
+                status: process.terminationStatus,
+                stdout: "",
+                stdoutData: Data(),
+                stderr: "",
+                truncated: true
+            )
+        }
+        defer { handle.detach() }
+
+        await processEnded.wait()
+
+        let stdoutData = stdoutCollector.drainRemaining(from: stdoutPipe.fileHandleForReading)
+        let stderrData = stderrCollector.drainRemaining(from: stderrPipe.fileHandleForReading)
+        let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+        let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+        let truncated = process.terminationReason == .uncaughtSignal
+        return GitProcessResult(
+            status: process.terminationStatus,
+            stdout: stdout,
+            stdoutData: stdoutData,
+            stderr: stderr,
+            truncated: truncated
+        )
     }
 
     private static func dispatch(
@@ -173,7 +247,7 @@ enum GitProcessRunner {
         defer { handle.detach() }
 
         let stderrCollector = AsyncDataCollector()
-        stderrCollector.start(reading: stderrPipe.fileHandleForReading, on: stderrDrainQueue)
+        stderrCollector.start(reading: stderrPipe.fileHandleForReading)
 
         let stdoutData: Data
         do {
@@ -184,13 +258,13 @@ enum GitProcessRunner {
             )
         } catch {
             handle.terminate()
-            _ = stderrCollector.wait()
+            _ = stderrCollector.drainRemaining(from: stderrPipe.fileHandleForReading)
             process.waitUntilExit()
             throw error
         }
 
         process.waitUntilExit()
-        let stderrData = stderrCollector.wait()
+        let stderrData = stderrCollector.drainRemaining(from: stderrPipe.fileHandleForReading)
 
         let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
         let stderr = String(data: stderrData, encoding: .utf8) ?? ""
@@ -281,23 +355,67 @@ private final class ProcessHandle: @unchecked Sendable {
 
 private final class AsyncDataCollector: @unchecked Sendable {
     private let lock = NSLock()
-    private var data = Data()
-    private let semaphore = DispatchSemaphore(value: 0)
+    private var buffer = Data()
 
-    func start(reading handle: FileHandle, on queue: DispatchQueue) {
-        queue.async { [self] in
-            let collected = handle.readDataToEndOfFile()
+    func start(reading handle: FileHandle) {
+        handle.readabilityHandler = { [weak self] fileHandle in
+            guard let self else { return }
+            let chunk = fileHandle.availableData
+            if chunk.isEmpty {
+                fileHandle.readabilityHandler = nil
+                return
+            }
             lock.lock()
-            data = collected
+            buffer.append(chunk)
             lock.unlock()
-            semaphore.signal()
         }
     }
 
-    func wait() -> Data {
-        semaphore.wait()
+    func snapshot() -> Data {
         lock.lock()
         defer { lock.unlock() }
-        return data
+        return buffer
+    }
+
+    func drainRemaining(from handle: FileHandle) -> Data {
+        handle.readabilityHandler = nil
+        let remaining = (try? handle.readToEnd()) ?? Data()
+        lock.lock()
+        if !remaining.isEmpty {
+            buffer.append(remaining)
+        }
+        let result = buffer
+        lock.unlock()
+        return result
+    }
+}
+
+private final class ProcessTerminationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var signaled = false
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+
+    func signal() {
+        lock.lock()
+        signaled = true
+        let pending = continuations
+        continuations.removeAll()
+        lock.unlock()
+        for continuation in pending {
+            continuation.resume()
+        }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if signaled {
+                lock.unlock()
+                continuation.resume()
+                return
+            }
+            continuations.append(continuation)
+            lock.unlock()
+        }
     }
 }
