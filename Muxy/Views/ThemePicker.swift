@@ -29,7 +29,7 @@ struct ThemePicker: View {
                 )
             }
         )
-        .frame(width: UIMetrics.scaled(280), height: UIMetrics.scaled(400))
+        .frame(width: UIMetrics.scaled(360), height: UIMetrics.scaled(480))
         .task {
             themes = await themeService.loadThemes()
             currentTheme = currentName()
@@ -64,47 +64,60 @@ private struct ThemeRow: View {
     let isHighlighted: Bool
     @State private var hovered = false
 
+    private var paletteAccents: [NSColor] {
+        let count = theme.palette.count
+        guard count > 0 else { return [] }
+        let indices = [1, 2, 3, 4, 5].filter { $0 < count }
+        return indices.map { theme.palette[$0] }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: UIMetrics.spacing2) {
-            HStack(spacing: UIMetrics.spacing2) {
-                Text(theme.name)
-                    .font(.system(size: UIMetrics.fontFootnote))
-                    .foregroundStyle(MuxyTheme.fg)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                if isActive {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: UIMetrics.fontXS, weight: .bold))
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-
-            HStack(spacing: 0) {
-                Rectangle()
+        HStack(spacing: UIMetrics.spacing4) {
+            ZStack {
+                RoundedRectangle(cornerRadius: UIMetrics.scaled(6), style: .continuous)
                     .fill(Color(nsColor: theme.background))
-                    .overlay(
-                        Text("Ab")
-                            .font(.system(size: UIMetrics.fontXS, weight: .medium, design: .monospaced))
-                            .foregroundStyle(Color(nsColor: theme.foreground))
-                    )
-                    .frame(width: UIMetrics.controlMedium)
+                Text("Aa")
+                    .font(.system(size: UIMetrics.fontFootnote, weight: .medium, design: .default))
+                    .foregroundStyle(Color(nsColor: theme.foreground))
+            }
+            .frame(width: UIMetrics.scaled(36), height: UIMetrics.scaled(28))
+            .overlay(
+                RoundedRectangle(cornerRadius: UIMetrics.scaled(6), style: .continuous)
+                    .strokeBorder(MuxyTheme.border.opacity(0.5), lineWidth: 0.5)
+            )
 
-                ForEach(Array(theme.palette.enumerated()), id: \.offset) { _, color in
-                    Rectangle().fill(Color(nsColor: color))
+            Text(theme.name)
+                .font(.system(size: UIMetrics.fontBody, weight: isActive ? .semibold : .regular))
+                .foregroundStyle(MuxyTheme.fg)
+                .lineLimit(1)
+
+            Spacer(minLength: UIMetrics.spacing3)
+
+            HStack(spacing: UIMetrics.scaled(3)) {
+                ForEach(Array(paletteAccents.enumerated()), id: \.offset) { _, color in
+                    Circle()
+                        .fill(Color(nsColor: color))
+                        .frame(width: UIMetrics.scaled(8), height: UIMetrics.scaled(8))
                 }
             }
-            .frame(height: UIMetrics.scaled(14))
-            .clipShape(RoundedRectangle(cornerRadius: UIMetrics.scaled(3)))
-            .overlay(
-                RoundedRectangle(cornerRadius: UIMetrics.scaled(3))
-                    .strokeBorder(MuxyTheme.border, lineWidth: 0.5)
-            )
+
+            Image(systemName: "checkmark")
+                .font(.system(size: UIMetrics.fontFootnote, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: UIMetrics.scaled(14))
+                .opacity(isActive ? 1 : 0)
         }
         .padding(.horizontal, UIMetrics.spacing5)
-        .padding(.vertical, UIMetrics.scaled(5))
-        .background(isHighlighted ? MuxyTheme.surface : (hovered ? MuxyTheme.hover : .clear))
+        .padding(.vertical, UIMetrics.scaled(7))
+        .background(rowBackground)
+        .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD, style: .continuous))
+        .padding(.horizontal, UIMetrics.spacing3)
         .onHover { hovered = $0 }
+    }
+
+    private var rowBackground: Color {
+        if isHighlighted { return MuxyTheme.accent.opacity(0.18) }
+        if hovered { return MuxyTheme.hover }
+        return .clear
     }
 }
