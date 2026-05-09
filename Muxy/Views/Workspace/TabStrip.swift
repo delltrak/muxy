@@ -123,16 +123,23 @@ struct PaneTabStrip: View {
         let effectiveWidth = availableWidth > 0 ? availableWidth : TabCell.maxWidth * CGFloat(count)
         let perTabIdeal = effectiveWidth / CGFloat(count)
         let perTabWidth = max(TabCell.minWidth, min(TabCell.maxWidth, perTabIdeal))
+        let notificationStore = NotificationStore.shared
+        let progressStore = TerminalProgressStore.shared
 
         return HStack(spacing: 0) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                 let globalIndex = shortcutIndexOffset + index
+                let runtime = TabRuntimeState(
+                    progress: tab.paneID.flatMap { progressStore.progress(for: $0) },
+                    hasCompletionPending: tab.paneID.map { progressStore.isCompletionPending(for: $0) } ?? false,
+                    hasUnread: notificationStore.hasUnread(tabID: tab.id)
+                )
                 TabCell(
                     tab: tab,
                     active: tab.id == activeTabID,
                     paneFocused: isFocused,
                     areaID: areaID,
-                    hasUnread: NotificationStore.shared.hasUnread(tabID: tab.id),
+                    runtime: runtime,
                     isAnyDragging: dragState.draggedID != nil,
                     cellWidth: perTabWidth,
                     shortcutIndex: globalIndex < 9 ? globalIndex + 1 : nil,
@@ -296,6 +303,12 @@ private struct TabDragState {
     var didSelect = false
 }
 
+struct TabRuntimeState: Equatable {
+    let progress: TerminalProgress?
+    let hasCompletionPending: Bool
+    let hasUnread: Bool
+}
+
 private typealias TabFramePreferenceKey = UUIDFramePreferenceKey<TabFrameTag>
 
 private struct TabCell: View {
@@ -307,7 +320,7 @@ private struct TabCell: View {
     let active: Bool
     let paneFocused: Bool
     let areaID: UUID
-    var hasUnread: Bool = false
+    let runtime: TabRuntimeState
     var isAnyDragging: Bool = false
     var cellWidth: CGFloat = TabCell.maxWidth
     var shortcutIndex: Int?
@@ -333,7 +346,6 @@ private struct TabCell: View {
     @State private var completionFlashOn = false
     @State private var flashTask: Task<Void, any Error>?
     @FocusState private var renameFieldFocused: Bool
-    private let progressStore = TerminalProgressStore.shared
 
     private static let springLoadDelay: Duration = .milliseconds(250)
 
@@ -364,13 +376,15 @@ private struct TabCell: View {
     }
 
     private var paneProgress: TerminalProgress? {
-        guard let paneID = tab.paneID else { return nil }
-        return progressStore.progress(for: paneID)
+        runtime.progress
     }
 
     private var hasCompletionPending: Bool {
-        guard let paneID = tab.paneID else { return false }
-        return progressStore.isCompletionPending(for: paneID)
+        runtime.hasCompletionPending
+    }
+
+    private var hasUnread: Bool {
+        runtime.hasUnread
     }
 
     private var showBadge: Bool {
@@ -570,7 +584,7 @@ private struct TabCell: View {
             completionFlashOn = true
         }
         if active, let paneID = tab.paneID {
-            progressStore.clearCompletion(for: paneID)
+            TerminalProgressStore.shared.clearCompletion(for: paneID)
         }
         flashTask = Task { @MainActor in
             try await Task.sleep(for: .milliseconds(450))

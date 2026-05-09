@@ -89,13 +89,24 @@ struct Sidebar: View {
     }
 
     private var projectList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        let notificationStore = NotificationStore.shared
+        let progressStore = TerminalProgressStore.shared
+        return ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: UIMetrics.spacing2) {
                 ForEach(Array(projectStore.projects.enumerated()), id: \.element.id) { index, project in
+                    let metadata = ProjectRowMetadata(
+                        unreadCount: notificationStore.unreadCount(for: project.id),
+                        hasCompletionPending: progressStore.hasCompletionPending(for: project.id)
+                    )
                     Group {
                         if isWide {
                             ExpandedProjectRow(
                                 project: project,
+                                metadata: metadata,
+                                worktreeUnreadCounts: worktreeUnreadCounts(
+                                    for: project.id,
+                                    notificationStore: notificationStore
+                                ),
                                 shortcutIndex: index < 9 ? index + 1 : nil,
                                 isAnyDragging: dragState.draggedID != nil,
                                 onSelect: { select(project) },
@@ -107,6 +118,7 @@ struct Sidebar: View {
                         } else {
                             ProjectRow(
                                 project: project,
+                                metadata: metadata,
                                 shortcutIndex: index < 9 ? index + 1 : nil,
                                 isAnyDragging: dragState.draggedID != nil,
                                 onSelect: { select(project) },
@@ -143,6 +155,17 @@ struct Sidebar: View {
 
     private func shortcutTooltip(_ name: String, for action: ShortcutAction) -> String {
         "\(name) (\(KeyBindingStore.shared.combo(for: action).displayString))"
+    }
+
+    private func worktreeUnreadCounts(
+        for projectID: UUID,
+        notificationStore: NotificationStore
+    ) -> [UUID: Int] {
+        var result: [UUID: Int] = [:]
+        for worktree in worktreeStore.list(for: projectID) {
+            result[worktree.id] = notificationStore.unreadCount(for: projectID, worktreeID: worktree.id)
+        }
+        return result
     }
 
     private func projectDragGesture(for project: Project) -> some Gesture {
