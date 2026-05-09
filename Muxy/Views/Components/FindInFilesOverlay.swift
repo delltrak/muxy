@@ -31,7 +31,9 @@ struct FindInFilesOverlay: View {
             .padding(.top, UIMetrics.scaled(60))
             .frame(maxHeight: .infinity, alignment: .top)
             .accessibilityAddTraits(.isModal)
+            .accessibilityAction(.escape) { onDismiss() }
         }
+        .onExitCommand(perform: onDismiss)
         .onAppear { performSearch(debounce: false) }
         .onDisappear { searchTask?.cancel() }
     }
