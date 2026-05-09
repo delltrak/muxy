@@ -30,13 +30,14 @@ struct TerminalProgressStoreTests {
     }
 
     @Test("transition from active to nil marks completion-pending")
-    func marksCompletion() {
+    func marksCompletion() async {
         let store = TerminalProgressStore()
         let pane = UUID()
         let project = UUID()
 
         store.setProgress(.clamping(kind: .set, percent: 80), for: pane, projectID: project)
         store.setProgress(nil, for: pane, projectID: project)
+        await waitForCoalesceFlush()
 
         #expect(store.progress(for: pane) == nil)
         #expect(store.isCompletionPending(for: pane))
@@ -56,13 +57,14 @@ struct TerminalProgressStoreTests {
     }
 
     @Test("clearCompletion removes pending state")
-    func clearsCompletion() {
+    func clearsCompletion() async {
         let store = TerminalProgressStore()
         let pane = UUID()
         let project = UUID()
 
         store.setProgress(.clamping(kind: .indeterminate, percent: nil), for: pane, projectID: project)
         store.setProgress(nil, for: pane, projectID: project)
+        await waitForCoalesceFlush()
 
         store.clearCompletion(for: pane)
 
@@ -71,13 +73,14 @@ struct TerminalProgressStoreTests {
     }
 
     @Test("resetPane clears all per-pane state")
-    func resetsPane() {
+    func resetsPane() async {
         let store = TerminalProgressStore()
         let pane = UUID()
         let project = UUID()
 
         store.setProgress(.clamping(kind: .set, percent: 30), for: pane, projectID: project)
         store.setProgress(nil, for: pane, projectID: project)
+        await waitForCoalesceFlush()
 
         store.resetPane(pane)
 
@@ -87,7 +90,7 @@ struct TerminalProgressStoreTests {
     }
 
     @Test("hasCompletionPending scopes by project")
-    func scopesByProject() {
+    func scopesByProject() async {
         let store = TerminalProgressStore()
         let paneA = UUID()
         let projectA = UUID()
@@ -95,8 +98,27 @@ struct TerminalProgressStoreTests {
 
         store.setProgress(.clamping(kind: .set, percent: 50), for: paneA, projectID: projectA)
         store.setProgress(nil, for: paneA, projectID: projectA)
+        await waitForCoalesceFlush()
 
         #expect(store.hasCompletionPending(for: projectA))
         #expect(!store.hasCompletionPending(for: projectB))
+    }
+
+    @Test("repeated identical progress values do not mark completion")
+    func dedupsRepeatedValues() async {
+        let store = TerminalProgressStore()
+        let pane = UUID()
+        let project = UUID()
+
+        store.setProgress(.clamping(kind: .set, percent: 50), for: pane, projectID: project)
+        store.setProgress(.clamping(kind: .set, percent: 50), for: pane, projectID: project)
+        await waitForCoalesceFlush()
+
+        #expect(store.progress(for: pane) == TerminalProgress(kind: .set, percent: 50))
+        #expect(!store.isCompletionPending(for: pane))
+    }
+
+    private func waitForCoalesceFlush() async {
+        try? await Task.sleep(nanoseconds: 80_000_000)
     }
 }

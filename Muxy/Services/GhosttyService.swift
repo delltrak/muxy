@@ -157,6 +157,11 @@ final class GhosttyService {
         ghostty_app_tick(app)
     }
 
+    func setAppFocused(_ focused: Bool) {
+        guard let app else { return }
+        ghostty_app_set_focus(app, focused)
+    }
+
     private func resolveGhosttyResources() {
         guard let bundled = Self.bundledResourcesPath() else {
             logger.error("bundled ghostty resources not found in app bundle")
