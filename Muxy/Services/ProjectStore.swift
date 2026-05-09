@@ -54,6 +54,13 @@ final class ProjectStore {
         save()
     }
 
+    func setWorkspaceID(id: UUID, to workspaceID: UUID?) {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
+        guard projects[index].workspaceID != workspaceID else { return }
+        projects[index].workspaceID = workspaceID
+        save()
+    }
+
     func reorder(fromOffsets source: IndexSet, toOffset destination: Int) {
         projects.move(fromOffsets: source, toOffset: destination)
         for index in projects.indices {

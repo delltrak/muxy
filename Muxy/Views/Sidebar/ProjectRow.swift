@@ -153,7 +153,7 @@ struct ProjectRow: View {
         let unread = metadata.unreadCount
         let hasCompletion = metadata.hasCompletionPending
         return ZStack {
-            RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
+            Circle()
                 .fill(iconBackground(hasLogo: logo != nil))
 
             if let logo {
@@ -161,7 +161,6 @@ struct ProjectRow: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
-                    .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
             } else {
                 Text(displayLetter)
                     .font(.system(size: UIMetrics.fontEmphasis, weight: .bold))
@@ -169,6 +168,7 @@ struct ProjectRow: View {
             }
         }
         .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
+        .clipShape(Circle())
         .padding(UIMetrics.scaled(3))
         .overlay(alignment: .topTrailing) {
             if unread > 0 {
@@ -182,7 +182,7 @@ struct ProjectRow: View {
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: UIMetrics.scaled(11))
+            Circle()
                 .strokeBorder(isActive ? MuxyTheme.accent : .clear, lineWidth: 1.5)
                 .animation(.easeInOut(duration: 0.15), value: isActive)
         }
@@ -196,7 +196,7 @@ struct ProjectRow: View {
     }
 
     private func iconBackground(hasLogo: Bool) -> AnyShapeStyle {
-        if hasLogo { return AnyShapeStyle(Color.clear) }
+        if hasLogo { return AnyShapeStyle(MuxyTheme.surface) }
         if let tint = ProjectIconColor.color(for: project.iconColor) {
             return AnyShapeStyle(hovered ? tint.opacity(0.85) : tint)
         }

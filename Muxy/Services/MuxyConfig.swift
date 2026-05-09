@@ -48,7 +48,7 @@ final class MuxyConfig {
     func applyThemeValue(_ value: String) {
         let entry = "theme = \(value)"
         var lines = readGhosttyConfig().components(separatedBy: "\n")
-        let colorKeys: Set<String> = [
+        let colorKeys: Set = [
             "theme",
             "background",
             "foreground",

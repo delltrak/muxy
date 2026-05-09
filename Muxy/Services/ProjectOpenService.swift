@@ -5,7 +5,8 @@ enum ProjectOpenService {
     static func openProject(
         appState: AppState,
         projectStore: ProjectStore,
-        worktreeStore: WorktreeStore
+        worktreeStore: WorktreeStore,
+        workspaceID: UUID? = nil
     ) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -13,12 +14,17 @@ enum ProjectOpenService {
         panel.allowsMultipleSelection = false
         panel.message = "Select a project folder"
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        let targetWorkspaceID = workspaceID ?? appState.activeWorkspaceID
         let project = Project(
             name: url.lastPathComponent,
             path: url.path(percentEncoded: false),
-            sortOrder: projectStore.projects.count
+            sortOrder: projectStore.projects.count,
+            workspaceID: targetWorkspaceID
         )
         projectStore.add(project)
+        if let targetWorkspaceID, appState.activeWorkspaceID != targetWorkspaceID {
+            appState.selectWorkspace(targetWorkspaceID, projects: projectStore.projects)
+        }
         worktreeStore.ensurePrimary(for: project)
         guard let primary = worktreeStore.primary(for: project.id) else { return }
         appState.selectProject(project, worktree: primary)

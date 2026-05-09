@@ -3,9 +3,9 @@ import Testing
 
 @testable import Muxy
 
-@Suite("WorkspaceSnapshot")
+@Suite("WorktreeLayoutSnapshot")
 @MainActor
-struct WorkspaceSnapshotTests {
+struct WorktreeLayoutSnapshotTests {
     private let testPath = "/tmp/test"
 
     @Test("TerminalTabSnapshot Codable round-trip for terminal")
@@ -169,12 +169,12 @@ struct WorkspaceSnapshotTests {
         }
     }
 
-    @Test("WorkspaceSnapshot Codable round-trip")
+    @Test("WorktreeLayoutSnapshot Codable round-trip")
     func workspaceSnapshotRoundTrip() throws {
         let projectID = UUID()
         let worktreeID = UUID()
         let focusedAreaID = UUID()
-        let snapshot = WorkspaceSnapshot(
+        let snapshot = WorktreeLayoutSnapshot(
             projectID: projectID,
             worktreeID: worktreeID,
             worktreePath: testPath,
@@ -186,7 +186,7 @@ struct WorkspaceSnapshotTests {
             ))
         )
         let data = try JSONEncoder().encode(snapshot)
-        let decoded = try JSONDecoder().decode(WorkspaceSnapshot.self, from: data)
+        let decoded = try JSONDecoder().decode(WorktreeLayoutSnapshot.self, from: data)
 
         #expect(decoded.projectID == projectID)
         #expect(decoded.worktreeID == worktreeID)
@@ -194,7 +194,7 @@ struct WorkspaceSnapshotTests {
         #expect(decoded.focusedAreaID == focusedAreaID)
     }
 
-    @Test("WorkspaceRestorer.snapshotAll produces correct structure")
+    @Test("WorktreeLayoutRestorer.snapshotAll produces correct structure")
     func snapshotAll() {
         let projectID = UUID()
         let worktreeID = UUID()
@@ -204,7 +204,7 @@ struct WorkspaceSnapshotTests {
         let workspaceRoots: [WorktreeKey: SplitNode] = [key: root]
         let focusedAreaID: [WorktreeKey: UUID] = [key: area.id]
 
-        let snapshots = WorkspaceRestorer.snapshotAll(
+        let snapshots = WorktreeLayoutRestorer.snapshotAll(
             workspaceRoots: workspaceRoots,
             focusedAreaID: focusedAreaID
         )
@@ -215,13 +215,13 @@ struct WorkspaceSnapshotTests {
         #expect(snapshots[0].focusedAreaID == area.id)
     }
 
-    @Test("WorkspaceRestorer.restoreAll rebuilds tree from snapshots")
+    @Test("WorktreeLayoutRestorer.restoreAll rebuilds tree from snapshots")
     func restoreAll() {
         let project = Project(name: "Test", path: testPath)
         let worktree = Worktree(name: "main", path: testPath, isPrimary: true)
         let areaID = UUID()
 
-        let snapshot = WorkspaceSnapshot(
+        let snapshot = WorktreeLayoutSnapshot(
             projectID: project.id,
             worktreeID: worktree.id,
             worktreePath: testPath,
@@ -233,7 +233,7 @@ struct WorkspaceSnapshotTests {
             ))
         )
 
-        let results = WorkspaceRestorer.restoreAll(
+        let results = WorktreeLayoutRestorer.restoreAll(
             from: [snapshot],
             projects: [project],
             worktrees: [project.id: [worktree]]
@@ -246,9 +246,9 @@ struct WorkspaceSnapshotTests {
         #expect(results[0].focusedAreaID == areaID)
     }
 
-    @Test("WorkspaceRestorer.restoreAll skips missing projects")
+    @Test("WorktreeLayoutRestorer.restoreAll skips missing projects")
     func restoreAllSkipsMissingProjects() {
-        let snapshot = WorkspaceSnapshot(
+        let snapshot = WorktreeLayoutSnapshot(
             projectID: UUID(),
             worktreeID: UUID(),
             worktreePath: testPath,
@@ -260,7 +260,7 @@ struct WorkspaceSnapshotTests {
             ))
         )
 
-        let results = WorkspaceRestorer.restoreAll(
+        let results = WorktreeLayoutRestorer.restoreAll(
             from: [snapshot],
             projects: [],
             worktrees: [:]
@@ -269,12 +269,12 @@ struct WorkspaceSnapshotTests {
         #expect(results.isEmpty)
     }
 
-    @Test("WorkspaceRestorer.restoreAll falls back to primary worktree")
+    @Test("WorktreeLayoutRestorer.restoreAll falls back to primary worktree")
     func restoreAllFallbackToPrimary() {
         let project = Project(name: "Test", path: testPath)
         let primaryWorktree = Worktree(name: "main", path: testPath, isPrimary: true)
 
-        let snapshot = WorkspaceSnapshot(
+        let snapshot = WorktreeLayoutSnapshot(
             projectID: project.id,
             worktreeID: UUID(),
             worktreePath: testPath,
@@ -286,7 +286,7 @@ struct WorkspaceSnapshotTests {
             ))
         )
 
-        let results = WorkspaceRestorer.restoreAll(
+        let results = WorktreeLayoutRestorer.restoreAll(
             from: [snapshot],
             projects: [project],
             worktrees: [project.id: [primaryWorktree]]
@@ -296,7 +296,7 @@ struct WorkspaceSnapshotTests {
         #expect(results[0].key.worktreeID == primaryWorktree.id)
     }
 
-    @Test("WorkspaceRestorer.restoreAll falls back to worktree path before primary")
+    @Test("WorktreeLayoutRestorer.restoreAll falls back to worktree path before primary")
     func restoreAllFallbackToPath() {
         let project = Project(name: "Test", path: testPath)
         let primaryWorktree = Worktree(name: "main", path: testPath, isPrimary: true)
@@ -308,7 +308,7 @@ struct WorkspaceSnapshotTests {
             isPrimary: false
         )
 
-        let snapshot = WorkspaceSnapshot(
+        let snapshot = WorktreeLayoutSnapshot(
             projectID: project.id,
             worktreeID: UUID(),
             worktreePath: importedWorktree.path,
@@ -320,7 +320,7 @@ struct WorkspaceSnapshotTests {
             ))
         )
 
-        let results = WorkspaceRestorer.restoreAll(
+        let results = WorktreeLayoutRestorer.restoreAll(
             from: [snapshot],
             projects: [project],
             worktrees: [project.id: [primaryWorktree, importedWorktree]]

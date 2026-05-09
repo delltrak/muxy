@@ -27,7 +27,8 @@ enum CLIAccessor {
         let project = Project(
             name: url.lastPathComponent,
             path: standardizedPath,
-            sortOrder: projectStore.projects.count
+            sortOrder: projectStore.projects.count,
+            workspaceID: appState.activeWorkspaceID
         )
         projectStore.add(project)
         worktreeStore.ensurePrimary(for: project)

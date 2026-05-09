@@ -9,6 +9,7 @@ struct MuxyApp: App {
     @State private var appState: AppState
     @State private var projectStore: ProjectStore
     @State private var worktreeStore: WorktreeStore
+    @State private var workspaceStore: WorkspaceStore
     @State private var vcsWorktreeAutoRefresher: VCSWorktreeAutoRefresher
     private let updateService = UpdateService.shared
 
@@ -16,6 +17,11 @@ struct MuxyApp: App {
         _ = MuxyApp.launchDate
         let environment = AppEnvironment.live
         let projectStore = ProjectStore(persistence: environment.projectPersistence)
+        let workspaceStore = WorkspaceStore(persistence: environment.workspacePersistence)
+        WorkspaceMigration.ensureDefaultWorkspace(
+            workspaceStore: workspaceStore,
+            projectStore: projectStore
+        )
         let worktreeStore = WorktreeStore(
             persistence: environment.worktreePersistence,
             projects: projectStore.projects
@@ -23,12 +29,15 @@ struct MuxyApp: App {
         let appState = AppState(
             selectionStore: environment.selectionStore,
             terminalViews: environment.terminalViews,
-            workspacePersistence: environment.workspacePersistence
+            worktreeLayoutPersistence: environment.worktreeLayoutPersistence
         )
         appState.restoreSelection(
             projects: projectStore.projects,
             worktrees: worktreeStore.worktrees
         )
+        if appState.activeWorkspaceID == nil {
+            appState.activeWorkspaceID = workspaceStore.workspaces.first?.id
+        }
         let vcsWorktreeAutoRefresher = VCSWorktreeAutoRefresher(
             appState: appState,
             projectStore: projectStore,
@@ -37,6 +46,7 @@ struct MuxyApp: App {
         _appState = State(initialValue: appState)
         _projectStore = State(initialValue: projectStore)
         _worktreeStore = State(initialValue: worktreeStore)
+        _workspaceStore = State(initialValue: workspaceStore)
         _vcsWorktreeAutoRefresher = State(initialValue: vcsWorktreeAutoRefresher)
     }
 
@@ -46,6 +56,7 @@ struct MuxyApp: App {
                 .environment(appState)
                 .environment(projectStore)
                 .environment(worktreeStore)
+                .environment(workspaceStore)
                 .environment(GhosttyService.shared)
                 .environment(MuxyConfig.shared)
                 .environment(ThemeService.shared)

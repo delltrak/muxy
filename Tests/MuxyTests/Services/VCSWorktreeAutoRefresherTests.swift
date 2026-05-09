@@ -90,7 +90,7 @@ struct VCSWorktreeAutoRefresherTests {
         let appState = AppState(
             selectionStore: SelectionStoreStub(),
             terminalViews: TerminalViewRemovingStub(),
-            workspacePersistence: WorkspacePersistenceStub()
+            worktreeLayoutPersistence: WorktreeLayoutPersistenceStub()
         )
         let refresher = VCSWorktreeAutoRefresher(
             appState: appState,
@@ -227,20 +227,23 @@ private final class WorktreePersistenceStub: WorktreePersisting, @unchecked Send
     }
 }
 
-private final class WorkspacePersistenceStub: WorkspacePersisting {
-    private var snapshots: [WorkspaceSnapshot] = []
-    func loadWorkspaces() throws -> [WorkspaceSnapshot] { snapshots }
-    func saveWorkspaces(_ workspaces: [WorkspaceSnapshot]) throws { snapshots = workspaces }
+private final class WorktreeLayoutPersistenceStub: WorktreeLayoutPersisting {
+    private var snapshots: [WorktreeLayoutSnapshot] = []
+    func loadWorktreeLayouts() throws -> [WorktreeLayoutSnapshot] { snapshots }
+    func saveWorktreeLayouts(_ workspaces: [WorktreeLayoutSnapshot]) throws { snapshots = workspaces }
 }
 
 @MainActor
 private final class SelectionStoreStub: ActiveProjectSelectionStoring {
     private var activeProjectID: UUID?
     private var activeWorktreeIDs: [UUID: UUID] = [:]
+    private var activeWorkspaceID: UUID?
     func loadActiveProjectID() -> UUID? { activeProjectID }
     func saveActiveProjectID(_ id: UUID?) { activeProjectID = id }
     func loadActiveWorktreeIDs() -> [UUID: UUID] { activeWorktreeIDs }
     func saveActiveWorktreeIDs(_ ids: [UUID: UUID]) { activeWorktreeIDs = ids }
+    func loadActiveWorkspaceID() -> UUID? { activeWorkspaceID }
+    func saveActiveWorkspaceID(_ id: UUID?) { activeWorkspaceID = id }
 }
 
 @MainActor

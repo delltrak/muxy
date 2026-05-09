@@ -10,8 +10,14 @@ struct Project: Identifiable, Codable, Hashable {
     var logo: String?
     var iconColor: String?
     var preferredWorktreeParentPath: String?
+    var workspaceID: UUID?
 
-    init(name: String, path: String, sortOrder: Int = 0) {
+    init(
+        name: String,
+        path: String,
+        sortOrder: Int = 0,
+        workspaceID: UUID? = nil
+    ) {
         self.id = UUID()
         self.name = name
         self.path = path
@@ -21,6 +27,7 @@ struct Project: Identifiable, Codable, Hashable {
         self.logo = nil
         self.iconColor = nil
         self.preferredWorktreeParentPath = nil
+        self.workspaceID = workspaceID
     }
 
     var pathExists: Bool {
