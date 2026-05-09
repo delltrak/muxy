@@ -11,6 +11,8 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
     @State private var searchText = ""
     @State private var highlightedIndex: Int?
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     private var filteredItems: [Item] {
         guard !searchText.isEmpty else { return items }
         return items.filter { filterKey($0).localizedCaseInsensitiveContains(searchText) }
@@ -39,19 +41,20 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
             Divider().overlay(MuxyTheme.border)
 
             if filteredItems.isEmpty {
-                Text(emptyLabel)
-                    .font(.system(size: UIMetrics.fontBody))
-                    .foregroundStyle(MuxyTheme.fgMuted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                                row(item, index == highlightedIndex)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onSelect(item) }
-                                    .id(item.id)
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    row(item, index == highlightedIndex)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(item.id)
                             }
                         }
                         .padding(.vertical, UIMetrics.spacing2)
@@ -63,8 +66,40 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
                 }
             }
         }
-        .background(MuxyTheme.bg)
+        .background(panelBackground)
         .onChange(of: searchText) { highlightedIndex = filteredItems.isEmpty ? nil : 0 }
+    }
+
+    @ViewBuilder
+    private var panelBackground: some View {
+        if reduceTransparency {
+            MuxyTheme.bg
+        } else {
+            Rectangle().fill(.regularMaterial)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if searchText.isEmpty {
+                Text(emptyLabel)
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(searchText)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func moveHighlight(_ delta: Int) {
