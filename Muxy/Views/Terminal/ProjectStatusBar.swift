@@ -105,6 +105,7 @@ struct ProjectStatusBar: View {
 
             Text("\(Int(clampedFontSize))")
                 .font(.system(size: 10, weight: .medium, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .frame(minWidth: 18)
                 .accessibilityLabel("Editor font size \(Int(clampedFontSize))")

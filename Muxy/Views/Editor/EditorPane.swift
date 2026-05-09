@@ -453,6 +453,7 @@ private struct EditorBreadcrumb: View {
             }
             Text("Ln \(state.cursorLine), Col \(state.cursorColumn)")
                 .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
+                .monospacedDigit()
                 .foregroundStyle(MuxyTheme.fgDim)
         }
         .padding(.horizontal, UIMetrics.spacing5)
