@@ -40,6 +40,7 @@ struct PaneTabStrip: View {
     let onSetColorID: (UUID, String?) -> Void
     let onReorderTab: (IndexSet, Int) -> Void
     @Environment(TabDragCoordinator.self) private var dragCoordinator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragState = TabDragState()
 
     static func snapshots(from tabs: [TerminalTab]) -> [TabSnapshot] {
@@ -251,7 +252,7 @@ struct PaneTabStrip: View {
                 onDropAction(result)
             }
         }
-        withAnimation(.easeInOut(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
             dragState.draggedID = nil
             dragState.isInSplitMode = false
             dragState.frames = [:]
@@ -275,7 +276,7 @@ struct PaneTabStrip: View {
 
             dragState.lastReorderTargetID = id
             let offset = destIndex > sourceIndex ? destIndex + 1 : destIndex
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                 onReorderTab(IndexSet(integer: sourceIndex), offset)
             }
             return
@@ -329,6 +330,7 @@ private struct TabCell: View {
     let onTogglePin: () -> Void
     let onSetCustomTitle: (String?) -> Void
     let onSetColorID: (String?) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered = false
     @State private var isRenaming = false
     @State private var renameText = ""
@@ -569,7 +571,7 @@ private struct TabCell: View {
                     .opacity(closeButtonVisible ? 1 : 0)
                     .allowsHitTesting(closeButtonVisible)
                     .onTapGesture(perform: onClose)
-                    .accessibilityLabel("Close Tab")
+                    .accessibilityLabel(Text("Close Tab"))
                     .accessibilityAddTraits(.isButton)
             }
         }
@@ -578,7 +580,7 @@ private struct TabCell: View {
 
     private func triggerCompletionFlash() {
         flashTask?.cancel()
-        withAnimation(.easeIn(duration: 0.15)) {
+        withAnimation(reduceMotion ? nil : .easeIn(duration: 0.15)) {
             completionFlashOn = true
         }
         if active, let paneID = tab.paneID {
@@ -586,7 +588,7 @@ private struct TabCell: View {
         }
         flashTask = Task { @MainActor in
             try await Task.sleep(for: .milliseconds(450))
-            withAnimation(.easeOut(duration: 0.4)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
                 completionFlashOn = false
             }
         }

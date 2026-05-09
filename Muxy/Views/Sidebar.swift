@@ -30,6 +30,7 @@ struct Sidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(ProjectStore.self) private var projectStore
     @Environment(WorktreeStore.self) private var worktreeStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragState = ProjectDragState()
     @State private var expanded = UserDefaults.standard.bool(forKey: "muxy.sidebarExpanded")
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
@@ -71,7 +72,7 @@ struct Sidebar: View {
     }
 
     private func toggleExpanded() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
             expanded.toggle()
         }
         UserDefaults.standard.set(expanded, forKey: "muxy.sidebarExpanded")
@@ -155,7 +156,7 @@ struct Sidebar: View {
                 reorderIfNeeded(at: value.location)
             }
             .onEnded { _ in
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                     dragState.draggedID = nil
                     dragState.frames = [:]
                     dragState.lastReorderTargetID = nil
@@ -199,7 +200,7 @@ struct Sidebar: View {
 
             dragState.lastReorderTargetID = id
             let offset = destIndex > sourceIndex ? destIndex + 1 : destIndex
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                 projectStore.reorder(
                     fromOffsets: IndexSet(integer: sourceIndex), toOffset: offset
                 )
