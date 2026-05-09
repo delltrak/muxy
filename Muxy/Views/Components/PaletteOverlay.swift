@@ -1,18 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// A generic command-palette overlay with a search field, a scrollable
-/// results list, and keyboard navigation. Used by Quick Open (files) and
-/// the Worktree Switcher.
-struct PaletteOverlay<Item: Identifiable & Sendable>: View {
+struct PaletteOverlay<Item: Identifiable & Sendable, RowContent: View>: View {
     let placeholder: String
     let emptyLabel: String
     let noMatchLabel: String
-    /// Provides items for a given query. Called on every query change.
     let search: (String) async -> [Item]
     let onSelect: (Item) -> Void
     let onDismiss: () -> Void
-    let row: (Item, Bool) -> AnyView
+    @ViewBuilder let row: (Item, Bool) -> RowContent
 
     @State private var query = ""
     @State private var results: [Item] = []
