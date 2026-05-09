@@ -2,6 +2,7 @@ import SwiftUI
 
 enum MuxyGlassVariant {
     case regular
+    case thin
     case interactive
     case tinted(Color)
     case interactiveTinted(Color)
@@ -10,6 +11,7 @@ enum MuxyGlassVariant {
         switch self {
         case .regular,
              .interactive: .regularMaterial
+        case .thin: .thinMaterial
         case .tinted,
              .interactiveTinted: .ultraThinMaterial
         }
@@ -41,6 +43,8 @@ private enum LiquidGlassApplier {
         switch variant {
         case .regular:
             view.glassEffect(.regular, in: shape)
+        case .thin:
+            view.glassEffect(.regular.tint(.clear), in: shape).opacity(0.5)
         case .interactive:
             view.glassEffect(.regular.interactive(), in: shape)
         case let .tinted(color):
