@@ -9,7 +9,7 @@ final class FileWorkspacePersistence: WorkspacePersisting {
     private let store: CodableFileStore<[WorkspaceSnapshot]>
 
     init(fileURL: URL = MuxyFileStorage.fileURL(filename: "workspaces.json")) {
-        store = CodableFileStore(fileURL: fileURL, options: .pretty)
+        store = CodableFileStore(fileURL: fileURL)
     }
 
     func loadWorkspaces() throws -> [WorkspaceSnapshot] {
@@ -17,6 +17,6 @@ final class FileWorkspacePersistence: WorkspacePersisting {
     }
 
     func saveWorkspaces(_ workspaces: [WorkspaceSnapshot]) throws {
-        try store.save(workspaces)
+        store.saveAsync(workspaces)
     }
 }
