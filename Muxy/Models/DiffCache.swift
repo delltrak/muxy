@@ -15,6 +15,7 @@ final class DiffCache {
     private(set) var errorsByPath: [String: String] = [:]
 
     @ObservationIgnored private var accessOrder: [String] = []
+    @ObservationIgnored private var errorOrder: [String] = []
     @ObservationIgnored nonisolated(unsafe) private var tasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private let cap: Int
 
@@ -41,6 +42,7 @@ final class DiffCache {
     func markLoading(_ filePath: String) {
         loadingPaths.insert(filePath)
         errorsByPath[filePath] = nil
+        errorOrder.removeAll { $0 == filePath }
     }
 
     func store(_ diff: LoadedDiff, for filePath: String, pinnedPaths: Set<String>) {
@@ -53,8 +55,11 @@ final class DiffCache {
 
     func storeError(_ message: String, for filePath: String) {
         errorsByPath[filePath] = message
+        errorOrder.removeAll { $0 == filePath }
+        errorOrder.append(filePath)
         loadingPaths.remove(filePath)
         tasks.removeValue(forKey: filePath)
+        enforceErrorCap()
     }
 
     func touch(_ filePath: String) {
@@ -65,6 +70,7 @@ final class DiffCache {
     func evict(_ filePath: String) {
         diffsByPath.removeValue(forKey: filePath)
         errorsByPath.removeValue(forKey: filePath)
+        errorOrder.removeAll { $0 == filePath }
         tasks[filePath]?.cancel()
         tasks.removeValue(forKey: filePath)
         loadingPaths.remove(filePath)
@@ -87,6 +93,7 @@ final class DiffCache {
         tasks.removeAll()
         loadingPaths.removeAll()
         errorsByPath.removeAll()
+        errorOrder.removeAll()
     }
 
     func clearAll() {
@@ -96,6 +103,7 @@ final class DiffCache {
         loadingPaths.removeAll()
         errorsByPath.removeAll()
         accessOrder.removeAll()
+        errorOrder.removeAll()
     }
 
     nonisolated func cancelAll() {
@@ -107,6 +115,14 @@ final class DiffCache {
             let oldest = accessOrder.removeFirst()
             if pinnedPaths.contains(oldest) { continue }
             diffsByPath.removeValue(forKey: oldest)
+            errorsByPath.removeValue(forKey: oldest)
+            errorOrder.removeAll { $0 == oldest }
+        }
+    }
+
+    private func enforceErrorCap() {
+        while errorOrder.count > cap {
+            let oldest = errorOrder.removeFirst()
             errorsByPath.removeValue(forKey: oldest)
         }
     }
