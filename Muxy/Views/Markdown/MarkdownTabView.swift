@@ -144,7 +144,7 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.layer?.backgroundColor = palette.background.cgColor
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = palette.background
-        webView.onReloadFromDisk = onReloadFromDisk
+        context.coordinator.bind(webView: webView, onReloadFromDisk: onReloadFromDisk)
         context.coordinator.configure(with: configuration)
         if scrollSyncEnabled {
             context.coordinator.applyPreferredScroll(
@@ -159,7 +159,7 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: MarkdownPreviewWebView, context: Context) {
-        webView.onReloadFromDisk = onReloadFromDisk
+        context.coordinator.bind(webView: webView, onReloadFromDisk: onReloadFromDisk)
         context.coordinator.configure(with: configuration)
         context.coordinator.updateHTML(
             contentUpdateRequest,
@@ -206,6 +206,17 @@ struct MarkdownWebView: NSViewRepresentable {
         private var isNavigationInFlight = false
         private var programmaticScrollSuppressionUntil: Date?
         private var lastAnchorGeometrySnapshot: [MarkdownPreviewAnchorGeometry] = []
+        private weak var boundWebView: MarkdownPreviewWebView?
+        private var didBindReloadHandler = false
+
+        func bind(webView: MarkdownPreviewWebView, onReloadFromDisk: (() -> Void)?) {
+            if boundWebView === webView, didBindReloadHandler {
+                return
+            }
+            boundWebView = webView
+            webView.onReloadFromDisk = onReloadFromDisk
+            didBindReloadHandler = true
+        }
 
         func configure(with configuration: Configuration) {
             scrollSyncEnabled = configuration.scrollSyncEnabled
