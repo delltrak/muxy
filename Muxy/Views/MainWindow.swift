@@ -388,11 +388,11 @@ struct MainWindow: View {
                 },
                 onSetCustomTitle: { tabID, title in
                     area.setCustomTitle(tabID, title: title)
-                    appState.saveWorkspaces()
+                    appState.scheduleSaveWorkspaces()
                 },
                 onSetColorID: { tabID, colorID in
                     area.setColorID(tabID, colorID: colorID)
-                    appState.saveWorkspaces()
+                    appState.scheduleSaveWorkspaces()
                 },
                 onReorderTab: { fromOffsets, toOffset in
                     area.reorderTab(fromOffsets: fromOffsets, toOffset: toOffset)
