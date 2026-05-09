@@ -38,103 +38,104 @@ struct ProjectRow: View {
     }
 
     var body: some View {
-        projectIcon
-            .help(project.name)
-            .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(project.name)
-            .accessibilityValue(isActive ? "Active" : "")
-            .accessibilityAddTraits(isActive ? .isSelected : [])
-            .accessibilityAddTraits(.isButton)
-            .onHover { hovering in
-                guard !isAnyDragging else { return }
-                hovered = hovering
+        Button {
+            guard !isAnyDragging else { return }
+            onSelect()
+        } label: {
+            projectIcon
+                .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
+        }
+        .buttonStyle(.plain)
+        .help(project.name)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(project.name)
+        .accessibilityValue(isActive ? "Active" : "")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .onHover { hovering in
+            guard !isAnyDragging else { return }
+            hovered = hovering
+        }
+        .onChange(of: isAnyDragging) { _, dragging in
+            if dragging { hovered = false }
+        }
+        .task(id: project.path) {
+            isGitRepo = await GitWorktreeService.shared.isGitRepository(project.path)
+        }
+        .contextMenu {
+            Button("Set Logo...") { pickLogoImage() }
+            if project.logo != nil {
+                Button("Remove Logo") { onSetLogo(nil) }
             }
-            .onChange(of: isAnyDragging) { _, dragging in
-                if dragging { hovered = false }
+            Button("Set Icon Color...") { showColorPicker = true }
+            if project.iconColor != nil {
+                Button("Reset Icon Color") { onSetIconColor(nil) }
             }
-            .onTapGesture {
-                guard !isAnyDragging else { return }
-                onSelect()
-            }
-            .task(id: project.path) {
-                isGitRepo = await GitWorktreeService.shared.isGitRepository(project.path)
-            }
-            .contextMenu {
-                Button("Set Logo...") { pickLogoImage() }
-                if project.logo != nil {
-                    Button("Remove Logo") { onSetLogo(nil) }
-                }
-                Button("Set Icon Color...") { showColorPicker = true }
-                if project.iconColor != nil {
-                    Button("Reset Icon Color") { onSetIconColor(nil) }
-                }
+            Divider()
+            Button("Rename Project") { startRename() }
+            if isGitRepo {
                 Divider()
-                Button("Rename Project") { startRename() }
-                if isGitRepo {
-                    Divider()
-                    Button("Refresh Worktrees") { Task { await refreshWorktrees() } }
-                    Button("New Worktree…") { showCreateWorktreeSheet = true }
-                    if worktrees.count > 1 {
-                        Button("Switch Worktree…") { showWorktreePopover = true }
-                    }
-                }
-                Divider()
-                Button("Remove Project", role: .destructive, action: onRemove)
-            }
-            .popover(isPresented: $showWorktreePopover, arrowEdge: .trailing) {
-                WorktreePopover(
-                    project: project,
-                    isGitRepo: isGitRepo,
-                    onDismiss: { showWorktreePopover = false },
-                    onRequestCreate: {
-                        showWorktreePopover = false
-                        showCreateWorktreeSheet = true
-                    }
-                )
-                .environment(appState)
-                .environment(worktreeStore)
-            }
-            .sheet(isPresented: $showCreateWorktreeSheet) {
-                CreateWorktreeSheet(project: project) { result in
-                    showCreateWorktreeSheet = false
-                    handleCreateWorktreeResult(result)
+                Button("Refresh Worktrees") { Task { await refreshWorktrees() } }
+                Button("New Worktree…") { showCreateWorktreeSheet = true }
+                if worktrees.count > 1 {
+                    Button("Switch Worktree…") { showWorktreePopover = true }
                 }
             }
-            .sheet(item: $logoCropImage) { item in
-                LogoCropperSheet(
-                    sourceImage: item.image,
-                    onConfirm: { cropped in
-                        logoCropImage = nil
-                        let logoPath = ProjectLogoStorage.save(
-                            croppedImage: cropped,
-                            forProjectID: project.id
-                        )
-                        onSetLogo(logoPath)
-                    },
-                    onCancel: { logoCropImage = nil }
-                )
-            }
-            .overlay {
-                if showShortcutBadge, let shortcutIndex,
-                   let action = ShortcutAction.projectAction(for: shortcutIndex)
-                {
-                    ShortcutBadge(label: KeyBindingStore.shared.combo(for: action).displayString)
+            Divider()
+            Button("Remove Project", role: .destructive, action: onRemove)
+        }
+        .popover(isPresented: $showWorktreePopover, arrowEdge: .trailing) {
+            WorktreePopover(
+                project: project,
+                isGitRepo: isGitRepo,
+                onDismiss: { showWorktreePopover = false },
+                onRequestCreate: {
+                    showWorktreePopover = false
+                    showCreateWorktreeSheet = true
                 }
+            )
+            .environment(appState)
+            .environment(worktreeStore)
+        }
+        .sheet(isPresented: $showCreateWorktreeSheet) {
+            CreateWorktreeSheet(project: project) { result in
+                showCreateWorktreeSheet = false
+                handleCreateWorktreeResult(result)
             }
-            .popover(isPresented: $isRenaming, arrowEdge: .trailing) {
-                RenamePopover(
-                    text: $renameText,
-                    onCommit: { commitRename() },
-                    onCancel: { cancelRename() }
-                )
+        }
+        .sheet(item: $logoCropImage) { item in
+            LogoCropperSheet(
+                sourceImage: item.image,
+                onConfirm: { cropped in
+                    logoCropImage = nil
+                    let logoPath = ProjectLogoStorage.save(
+                        croppedImage: cropped,
+                        forProjectID: project.id
+                    )
+                    onSetLogo(logoPath)
+                },
+                onCancel: { logoCropImage = nil }
+            )
+        }
+        .overlay {
+            if showShortcutBadge, let shortcutIndex,
+               let action = ShortcutAction.projectAction(for: shortcutIndex)
+            {
+                ShortcutBadge(label: KeyBindingStore.shared.combo(for: action).displayString)
             }
-            .popover(isPresented: $showColorPicker, arrowEdge: .trailing) {
-                ProjectIconColorPicker(selectedID: project.iconColor) { id in
-                    onSetIconColor(id)
-                    showColorPicker = false
-                }
+        }
+        .popover(isPresented: $isRenaming, arrowEdge: .trailing) {
+            RenamePopover(
+                text: $renameText,
+                onCommit: { commitRename() },
+                onCancel: { cancelRename() }
+            )
+        }
+        .popover(isPresented: $showColorPicker, arrowEdge: .trailing) {
+            ProjectIconColorPicker(selectedID: project.iconColor) { id in
+                onSetIconColor(id)
+                showColorPicker = false
             }
+        }
     }
 
     private var resolvedLogo: NSImage? {
