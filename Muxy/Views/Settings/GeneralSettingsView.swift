@@ -15,65 +15,119 @@ struct GeneralSettingsView: View {
     @AppStorage(QuitConfirmationPreferences.confirmQuitKey)
     private var confirmQuit = true
 
+    @Environment(\.settingsSearchQuery) private var searchQuery
+
     var body: some View {
-        SettingsContainer {
-            SettingsSection(
-                "Updates",
-                footer: "The Beta channel ships every change merged to main and may be unstable. "
-                    + "Switch back to Stable to receive only tagged releases."
-            ) {
-                SettingsRow("Update channel") {
+        Form {
+            updatesSection
+            sidebarSection
+            projectsSection
+            worktreesSection
+            tabsSection
+            quitSection
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private var updatesSection: some View {
+        let keywords = ["beta", "stable", "release"]
+        if isSectionVisible(["Update channel"], extra: keywords) {
+            Section {
+                SettingsSearchableRow("Update channel", keywords: keywords) {
                     Picker("", selection: channelBinding) {
                         ForEach(UpdateChannel.allCases) { channel in
                             Text(channel.displayName).tag(channel)
                         }
                     }
                     .labelsHidden()
-                    .frame(width: SettingsMetrics.controlWidth, alignment: .trailing)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text(
+                    "The Beta channel ships every change merged to main and may be unstable. "
+                        + "Switch back to Stable to receive only tagged releases."
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarSection: some View {
+        if isSectionVisible(["Auto-expand worktrees on project switch"]) {
+            Section {
+                SettingsSearchableRow("Auto-expand worktrees on project switch") {
+                    Toggle("", isOn: $autoExpandWorktrees).labelsHidden()
+                }
+            } header: {
+                Text("Sidebar")
+            } footer: {
+                Text("Automatically reveal worktrees when you switch to a project.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var projectsSection: some View {
+        if isSectionVisible(["Keep projects open after closing the last tab"]) {
+            Section {
+                SettingsSearchableRow("Keep projects open after closing the last tab") {
+                    Toggle("", isOn: $keepProjectsOpenWhenNoTabs).labelsHidden()
+                }
+            } header: {
+                Text("Projects")
+            } footer: {
+                Text(
+                    "Keep projects in the sidebar after closing their last tab. "
+                        + "To remove a project afterward, use the right-click menu."
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var worktreesSection: some View {
+        if isSectionVisible(["Default path for new worktrees"], extra: ["folder", "location"]) {
+            Section {
+                LabeledContent("Default path for new worktrees") {
+                    HStack(spacing: 8) {
+                        pathDisplay
+                        Button("Choose Folder…") { chooseDefaultWorktreeParentPath() }
+                        Button("Use App Default") { defaultWorktreeParentPath = "" }
+                            .disabled(defaultWorktreeParentPath.isEmpty)
+                    }
+                }
+            } header: {
+                Text("Worktrees")
+            } footer: {
+                Text(
+                    "Muxy creates a project-named subfolder inside this folder. "
+                        + "Projects can still override this from the new worktree dialog."
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tabsSection: some View {
+        if isSectionVisible(["Confirm before closing a tab with a running process"]) {
+            Section("Tabs") {
+                SettingsSearchableRow("Confirm before closing a tab with a running process") {
+                    Toggle("", isOn: $confirmRunningProcess).labelsHidden()
                 }
             }
+        }
+    }
 
-            SettingsSection(
-                "Sidebar",
-                footer: "Automatically reveal worktrees when you switch to a project."
-            ) {
-                SettingsToggleRow(
-                    label: "Auto-expand worktrees on project switch",
-                    isOn: $autoExpandWorktrees
-                )
-            }
-
-            SettingsSection(
-                "Projects",
-                footer: "Keep projects in the sidebar after closing their last tab. "
-                    + "To remove a project afterward, use the right-click menu."
-            ) {
-                SettingsToggleRow(
-                    label: "Keep projects open after closing the last tab",
-                    isOn: $keepProjectsOpenWhenNoTabs
-                )
-            }
-
-            SettingsSection(
-                "Worktrees",
-                footer: "Muxy creates a project-named subfolder inside this folder. "
-                    + "Projects can still override this from the new worktree dialog."
-            ) {
-                worktreeLocationControl
-            }
-
-            SettingsSection("Tabs") {
-                SettingsToggleRow(
-                    label: "Confirm before closing a tab with a running process",
-                    isOn: $confirmRunningProcess
-                )
-            }
-
-            SettingsSection("Quit", showsDivider: false) {
-                SettingsToggleRow(
-                    label: "Confirm before quitting Muxy",
-                    isOn: $confirmQuit
-                )
+    @ViewBuilder
+    private var quitSection: some View {
+        if isSectionVisible(["Confirm before quitting Muxy"]) {
+            Section("Quit") {
+                SettingsSearchableRow("Confirm before quitting Muxy") {
+                    Toggle("", isOn: $confirmQuit).labelsHidden()
+                }
             }
         }
     }
@@ -92,54 +146,29 @@ struct GeneralSettingsView: View {
         defaultWorktreeParentPath.isEmpty ? "Muxy App Support" : defaultWorktreeParentPath
     }
 
-    private var worktreeLocationControl: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Default path for new worktrees")
-                .font(.system(size: SettingsMetrics.labelFontSize))
-
-            HStack(alignment: .center, spacing: 8) {
-                pathDisplay
-                    .layoutPriority(1)
-
-                Button("Choose Folder...") {
-                    chooseDefaultWorktreeParentPath()
-                }
-                .fixedSize(horizontal: true, vertical: false)
-
-                Button("Use App Default") {
-                    defaultWorktreeParentPath = ""
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .disabled(defaultWorktreeParentPath.isEmpty)
-            }
-        }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-    }
-
     private var pathDisplay: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Image(systemName: defaultWorktreeParentPath.isEmpty ? "internaldrive" : "folder")
-                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 15)
 
             Text(defaultWorktreeLocationText)
-                .font(.system(size: SettingsMetrics.footnoteFontSize, design: .monospaced))
+                .font(.system(.body, design: .monospaced))
                 .foregroundStyle(defaultWorktreeParentPath.isEmpty ? .secondary : .primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 9)
-        .frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
-        .frame(height: 22)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(.quaternary.opacity(0.7), lineWidth: 1)
-        )
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func isSectionVisible(_ labels: [String], extra: [String] = []) -> Bool {
+        let trimmed = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return true }
+        let haystack = labels + extra
+        return haystack.contains { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 
     private func chooseDefaultWorktreeParentPath() {

@@ -13,13 +13,6 @@ struct KeyboardShortcutsSettingsView: View {
             case .custom: "Custom Commands"
             }
         }
-
-        var searchPlaceholder: String {
-            switch self {
-            case .app: "Search shortcuts"
-            case .custom: "Search commands"
-            }
-        }
     }
 
     @State private var section: ListSection = .app
@@ -27,12 +20,13 @@ struct KeyboardShortcutsSettingsView: View {
     @State private var recordingCommandPrefix = false
     @State private var recordingCommandShortcutID: UUID?
     @State private var pendingCommandShortcutID: UUID?
-    @State private var searchText = ""
     @State private var conflictWarning: (action: ShortcutAction, existing: ShortcutAction)?
     @State private var commandPrefixConflictWarning: String?
     @State private var commandConflictWarning: (id: UUID, message: String)?
     @State private var deleteAllCommandShortcutsSecondsRemaining = 0
     @State private var deleteAllCommandShortcutsTask: Task<Void, Never>?
+
+    @Environment(\.settingsSearchQuery) private var searchText
 
     private var store: KeyBindingStore { KeyBindingStore.shared }
     private var commandStore: CommandShortcutStore { CommandShortcutStore.shared }
@@ -41,28 +35,12 @@ struct KeyboardShortcutsSettingsView: View {
         VStack(spacing: 0) {
             sectionPicker
             Divider()
-            header
-            Divider()
-            switch section {
-            case .app: appShortcutsList
-            case .custom: customShortcutsList
-            }
+            content
         }
-    }
-
-    private var sectionPicker: some View {
-        Picker("", selection: $section) {
-            ForEach(ListSection.allCases) { section in
-                Text(section.title).tag(section)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
         .onChange(of: section) { _, _ in
             discardPendingCommandShortcut()
-            searchText = ""
             recordingAction = nil
             recordingCommandPrefix = false
             recordingCommandShortcutID = nil
@@ -73,19 +51,17 @@ struct KeyboardShortcutsSettingsView: View {
         }
     }
 
-    private var header: some View {
+    private var sectionPicker: some View {
         HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                TextField(section.searchPlaceholder, text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
+            Picker("", selection: $section) {
+                ForEach(ListSection.allCases) { section in
+                    Text(section.title).tag(section)
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            Spacer()
 
             switch section {
             case .app:
@@ -94,175 +70,165 @@ struct KeyboardShortcutsSettingsView: View {
                     recordingAction = nil
                     conflictWarning = nil
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: SettingsMetrics.footnoteFontSize))
-                .foregroundStyle(.secondary)
             case .custom:
                 Button {
-                    searchText = ""
                     discardPendingCommandShortcut()
                     let shortcut = commandStore.addShortcut()
                     pendingCommandShortcutID = shortcut.id
                     recordingCommandPrefix = false
                     recordingCommandShortcutID = shortcut.id
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .semibold))
+                    Label("Add", systemImage: "plus")
                 }
-                .buttonStyle(.plain)
                 .help("Add Command Shortcut")
-                .accessibilityLabel("Add Command Shortcut")
             }
         }
-        .padding(SettingsMetrics.horizontalPadding)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch section {
+        case .app: appShortcutsList
+        case .custom: customShortcutsList
+        }
     }
 
     private var appShortcutsList: some View {
         let visibleCategories = ShortcutAction.categories.filter { !filteredActions(for: $0).isEmpty }
-        return ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 0) {
-                ForEach(visibleCategories, id: \.self) { category in
-                    categorySection(
-                        title: category,
-                        actions: filteredActions(for: category),
-                        isLast: category == visibleCategories.last
+        return Form {
+            ForEach(visibleCategories, id: \.self) { category in
+                Section(category) {
+                    ForEach(filteredActions(for: category)) { action in
+                        ShortcutRow(
+                            action: action,
+                            combo: store.combo(for: action),
+                            isRecording: recordingAction == action,
+                            conflictAction: conflictWarning?.action == action ? conflictWarning?.existing : nil,
+                            onStartRecording: {
+                                discardPendingCommandShortcut()
+                                recordingAction = action
+                                recordingCommandPrefix = false
+                                recordingCommandShortcutID = nil
+                                conflictWarning = nil
+                            },
+                            onRecord: { combo in handleRecord(action: action, combo: combo) },
+                            onCancel: { recordingAction = nil
+                                conflictWarning = nil
+                            },
+                            onReset: { store.resetBinding(action: action)
+                                conflictWarning = nil
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+    }
+
+    private var customShortcutsList: some View {
+        Form {
+            Section {
+                CommandPrefixRow(
+                    combo: commandStore.prefixCombo,
+                    isRecording: recordingCommandPrefix,
+                    conflictMessage: commandPrefixConflictWarning,
+                    onStartRecording: {
+                        discardPendingCommandShortcut()
+                        recordingAction = nil
+                        recordingCommandPrefix = true
+                        recordingCommandShortcutID = nil
+                        commandPrefixConflictWarning = nil
+                        commandConflictWarning = nil
+                    },
+                    onRecord: handleRecord(prefixCombo:),
+                    onCancel: {
+                        recordingCommandPrefix = false
+                        commandPrefixConflictWarning = nil
+                    },
+                    onReset: {
+                        commandStore.resetPrefixCombo()
+                        recordingCommandPrefix = false
+                        commandPrefixConflictWarning = nil
+                    }
+                )
+            } header: {
+                Text("Custom Commands")
+            } footer: {
+                Text("Press the command layer shortcut, then a command key to open a new terminal tab.")
+            }
+
+            if !filteredCommandShortcuts.isEmpty {
+                Section("Shortcuts") {
+                    ForEach(filteredCommandShortcuts) { shortcut in
+                        CommandShortcutRow(
+                            shortcut: binding(for: shortcut),
+                            prefixCombo: commandStore.prefixCombo,
+                            isRecording: recordingCommandShortcutID == shortcut.id,
+                            conflictMessage: commandConflictWarning?.id == shortcut.id ? commandConflictWarning?.message : nil,
+                            onStartRecording: {
+                                if pendingCommandShortcutID != shortcut.id {
+                                    discardPendingCommandShortcut()
+                                }
+                                recordingAction = nil
+                                recordingCommandPrefix = false
+                                recordingCommandShortcutID = shortcut.id
+                                commandConflictWarning = nil
+                            },
+                            onRecord: { combo in handleRecord(shortcutID: shortcut.id, combo: combo) },
+                            onCancel: {
+                                cancelCommandShortcutRecording(shortcutID: shortcut.id)
+                            },
+                            onDelete: {
+                                commandStore.deleteShortcut(id: shortcut.id)
+                                if recordingCommandShortcutID == shortcut.id {
+                                    recordingCommandShortcutID = nil
+                                }
+                                if pendingCommandShortcutID == shortcut.id {
+                                    pendingCommandShortcutID = nil
+                                }
+                                if commandConflictWarning?.id == shortcut.id {
+                                    commandConflictWarning = nil
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            if !commandStore.shortcuts.isEmpty {
+                Section {
+                    DeleteAllCommandShortcutsRow(
+                        secondsRemaining: deleteAllCommandShortcutsSecondsRemaining,
+                        action: handleDeleteAllCommandShortcuts
                     )
                 }
             }
         }
-    }
-
-    private var customShortcutsList: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            commandShortcutsSection
-        }
-    }
-
-    private func categorySection(title: String, actions: [ShortcutAction], isLast: Bool) -> some View {
-        SettingsSection(title, showsDivider: !isLast) {
-            ForEach(actions) { action in
-                ShortcutRow(
-                    action: action,
-                    combo: store.combo(for: action),
-                    isRecording: recordingAction == action,
-                    conflictAction: conflictWarning?.action == action ? conflictWarning?.existing : nil,
-                    onStartRecording: {
-                        discardPendingCommandShortcut()
-                        recordingAction = action
-                        recordingCommandPrefix = false
-                        recordingCommandShortcutID = nil
-                        conflictWarning = nil
-                    },
-                    onRecord: { combo in handleRecord(action: action, combo: combo) },
-                    onCancel: { recordingAction = nil
-                        conflictWarning = nil
-                    },
-                    onReset: { store.resetBinding(action: action)
-                        conflictWarning = nil
-                    }
-                )
-            }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .onDisappear {
+            discardPendingCommandShortcut()
+            cancelDeleteAllCommandShortcutsConfirmation()
         }
     }
 
     private func filteredActions(for category: String) -> [ShortcutAction] {
         let actions = ShortcutAction.allCases.filter { $0.category == category }
-        guard !searchText.isEmpty else { return actions }
-        return actions.filter { $0.displayName.localizedCaseInsensitiveContains(searchText) }
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return actions }
+        return actions.filter { $0.displayName.localizedCaseInsensitiveContains(trimmed) }
     }
 
     private var filteredCommandShortcuts: [CommandShortcut] {
-        guard !searchText.isEmpty else { return commandStore.shortcuts }
+        let trimmed = searchText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return commandStore.shortcuts }
         return commandStore.shortcuts.filter {
-            $0.displayName.localizedCaseInsensitiveContains(searchText)
-                || $0.command.localizedCaseInsensitiveContains(searchText)
-        }
-    }
-
-    private var commandShortcutsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Custom Commands")
-                .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, SettingsMetrics.horizontalPadding)
-                .padding(.top, SettingsMetrics.sectionHeaderTopPadding)
-                .padding(.bottom, 2)
-
-            Text("Press the command layer shortcut, then a command key to open a new terminal tab.")
-                .font(.system(size: SettingsMetrics.footnoteFontSize))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, SettingsMetrics.horizontalPadding)
-                .padding(.bottom, SettingsMetrics.sectionHeaderBottomPadding)
-
-            CommandPrefixRow(
-                combo: commandStore.prefixCombo,
-                isRecording: recordingCommandPrefix,
-                conflictMessage: commandPrefixConflictWarning,
-                onStartRecording: {
-                    discardPendingCommandShortcut()
-                    recordingAction = nil
-                    recordingCommandPrefix = true
-                    recordingCommandShortcutID = nil
-                    commandPrefixConflictWarning = nil
-                    commandConflictWarning = nil
-                },
-                onRecord: handleRecord(prefixCombo:),
-                onCancel: {
-                    recordingCommandPrefix = false
-                    commandPrefixConflictWarning = nil
-                },
-                onReset: {
-                    commandStore.resetPrefixCombo()
-                    recordingCommandPrefix = false
-                    commandPrefixConflictWarning = nil
-                }
-            )
-
-            ForEach(filteredCommandShortcuts) { shortcut in
-                CommandShortcutRow(
-                    shortcut: binding(for: shortcut),
-                    prefixCombo: commandStore.prefixCombo,
-                    isRecording: recordingCommandShortcutID == shortcut.id,
-                    conflictMessage: commandConflictWarning?.id == shortcut.id ? commandConflictWarning?.message : nil,
-                    onStartRecording: {
-                        if pendingCommandShortcutID != shortcut.id {
-                            discardPendingCommandShortcut()
-                        }
-                        recordingAction = nil
-                        recordingCommandPrefix = false
-                        recordingCommandShortcutID = shortcut.id
-                        commandConflictWarning = nil
-                    },
-                    onRecord: { combo in handleRecord(shortcutID: shortcut.id, combo: combo) },
-                    onCancel: {
-                        cancelCommandShortcutRecording(shortcutID: shortcut.id)
-                    },
-                    onDelete: {
-                        commandStore.deleteShortcut(id: shortcut.id)
-                        if recordingCommandShortcutID == shortcut.id {
-                            recordingCommandShortcutID = nil
-                        }
-                        if pendingCommandShortcutID == shortcut.id {
-                            pendingCommandShortcutID = nil
-                        }
-                        if commandConflictWarning?.id == shortcut.id {
-                            commandConflictWarning = nil
-                        }
-                    }
-                )
-            }
-
-            if !commandStore.shortcuts.isEmpty {
-                DeleteAllCommandShortcutsRow(
-                    secondsRemaining: deleteAllCommandShortcutsSecondsRemaining,
-                    action: handleDeleteAllCommandShortcuts
-                )
-            }
-        }
-        .onDisappear {
-            discardPendingCommandShortcut()
-            cancelDeleteAllCommandShortcutsConfirmation()
+            $0.displayName.localizedCaseInsensitiveContains(trimmed)
+                || $0.command.localizedCaseInsensitiveContains(trimmed)
         }
     }
 
@@ -374,68 +340,43 @@ private struct ShortcutRow: View {
     @State private var hovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        LabeledContent {
+            if isRecording {
+                ShortcutRecordingControl(
+                    onRecord: onRecord,
+                    onCancel: onCancel
+                )
+            } else {
+                HStack(spacing: 6) {
+                    if hovered {
+                        Button(action: onReset) {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Reset Shortcut")
+                    }
+                    Button(action: onStartRecording) {
+                        Text(combo.displayString)
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(action.displayName)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if isRecording {
-                    recordingView
-                } else {
-                    comboDisplay
+                if let conflictAction {
+                    Text("Conflicts with \"\(conflictAction.displayName)\" — press a different shortcut or Esc to cancel")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
-
-            if let conflictAction {
-                Text("Conflicts with \"\(conflictAction.displayName)\" — press a different shortcut or Esc to cancel")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.orange)
-            }
         }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-        .background(hovered ? Color.primary.opacity(0.04) : .clear)
         .onHover { hovered = $0 }
-    }
-
-    private var comboDisplay: some View {
-        HStack(spacing: 6) {
-            if hovered {
-                Button(action: onReset) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Reset Shortcut")
-            }
-
-            Button(action: onStartRecording) {
-                Text(combo.displayString)
-                    .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var recordingView: some View {
-        ZStack {
-            ShortcutRecorderView(onRecord: onRecord, onCancel: onCancel)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-
-            Text("Press shortcut…")
-                .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium))
-                .foregroundStyle(.orange)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-        }
     }
 }
 
@@ -450,77 +391,44 @@ private struct CommandPrefixRow: View {
     @State private var hovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        LabeledContent {
+            if isRecording {
+                ShortcutRecordingControl(onRecord: onRecord, onCancel: onCancel)
+            } else {
+                HStack(spacing: 6) {
+                    if hovered {
+                        Button(action: onReset) {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Reset Shortcut")
+                    }
+                    Button(action: onStartRecording) {
+                        Text(combo.displayString)
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Command Layer")
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                if isRecording {
-                    recordingView
-                } else {
-                    comboDisplay
+                if let conflictMessage {
+                    Text("\(conflictMessage) — press a different shortcut or Esc to cancel")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
-
-            if let conflictMessage {
-                Text("\(conflictMessage) — press a different shortcut or Esc to cancel")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.orange)
-            }
         }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-        .background(hovered ? Color.primary.opacity(0.04) : .clear)
         .onHover { hovered = $0 }
-    }
-
-    private var comboDisplay: some View {
-        HStack(spacing: 6) {
-            if hovered {
-                Button(action: onReset) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Reset Shortcut")
-            }
-
-            Button(action: onStartRecording) {
-                Text(combo.displayString)
-                    .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var recordingView: some View {
-        ZStack {
-            ShortcutRecorderView(onRecord: onRecord, onCancel: onCancel)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-
-            Text("Press shortcut…")
-                .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium))
-                .foregroundStyle(.orange)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
-        }
     }
 }
 
 private struct CommandShortcutRow: View {
-    private enum Metrics {
-        static let deleteButtonSize: CGFloat = 18
-        static let shortcutControlWidth: CGFloat = 130
-    }
-
     @Binding var shortcut: CommandShortcut
     let prefixCombo: KeyCombo
     let isRecording: Bool
@@ -529,86 +437,81 @@ private struct CommandShortcutRow: View {
     let onRecord: (KeyCombo) -> Void
     let onCancel: () -> Void
     let onDelete: () -> Void
-    @State private var hovered = false
-    @State private var deleteButtonHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 TextField("Name", text: $shortcut.name)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: SettingsMetrics.labelFontSize))
-                    .frame(width: 120)
+                    .frame(minWidth: 120)
 
                 TextField("Command", text: $shortcut.command)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: SettingsMetrics.labelFontSize, design: .monospaced))
+                    .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: .infinity)
 
                 if isRecording {
-                    recordingView
+                    ShortcutRecordingControl(
+                        onRecord: onRecord,
+                        onCancel: onCancel,
+                        requiresModifier: false,
+                        prompt: "Press key…"
+                    )
                 } else {
-                    comboDisplay
+                    Button(action: onStartRecording) {
+                        Text("\(prefixCombo.displayString) \(shortcut.combo.displayString)")
+                            .font(.system(.callout, design: .rounded).weight(.medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    }
+                    .buttonStyle(.plain)
                 }
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .controlSize(.regular)
+                .buttonStyle(.borderless)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Delete Command Shortcut")
             }
 
             if let conflictMessage {
                 Text("\(conflictMessage) — press a different shortcut or Esc to cancel")
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
-        .background(hovered ? Color.primary.opacity(0.04) : .clear)
-        .onHover { hovered = $0 }
     }
+}
 
-    private var comboDisplay: some View {
-        HStack(spacing: 6) {
-            Button(action: onStartRecording) {
-                Text("\(prefixCombo.displayString) \(shortcut.combo.displayString)")
-                    .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
-            }
-            .buttonStyle(.plain)
+private struct ShortcutRecordingControl: View {
+    let onRecord: (KeyCombo) -> Void
+    let onCancel: () -> Void
+    var requiresModifier: Bool = true
+    var prompt: String = "Press shortcut…"
 
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.system(size: 10))
-                    .foregroundStyle(
-                        deleteButtonHovered ? AnyShapeStyle(MuxyTheme.diffRemoveFg) : AnyShapeStyle(.secondary)
-                    )
-                    .frame(width: Metrics.deleteButtonSize, height: Metrics.deleteButtonSize)
-            }
-            .buttonStyle(.plain)
-            .background(
-                deleteButtonHovered ? AnyShapeStyle(MuxyTheme.diffRemoveBg) : AnyShapeStyle(.quaternary),
-                in: RoundedRectangle(cornerRadius: 5)
-            )
-            .onHover { isHovering in
-                deleteButtonHovered = isHovering
-            }
-            .accessibilityLabel("Delete Command Shortcut")
-        }
-        .frame(alignment: .trailing)
-    }
-
-    private var recordingView: some View {
+    var body: some View {
         ZStack {
-            ShortcutRecorderView(onRecord: onRecord, onCancel: onCancel, requiresModifier: false)
-                .frame(width: 0, height: 0)
-                .opacity(0)
+            ShortcutRecorderView(
+                onRecord: onRecord,
+                onCancel: onCancel,
+                requiresModifier: requiresModifier
+            )
+            .frame(width: 0, height: 0)
+            .opacity(0)
 
-            Text("Press key…")
-                .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium))
+            Text(prompt)
+                .font(.system(.callout, design: .rounded).weight(.medium))
                 .foregroundStyle(.orange)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5)
+                        .strokeBorder(.orange.opacity(0.6), lineWidth: 1)
+                )
         }
     }
 }
@@ -624,20 +527,12 @@ private struct DeleteAllCommandShortcutsRow: View {
     var body: some View {
         HStack {
             Spacer()
-
-            Button(action: action) {
+            Button(role: .destructive, action: action) {
                 Text(title)
-                    .font(.system(size: SettingsMetrics.footnoteFontSize, weight: .medium))
-                    .foregroundStyle(isConfirming ? MuxyTheme.diffRemoveFg : .secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(backgroundStyle, in: RoundedRectangle(cornerRadius: 5))
             }
-            .buttonStyle(.plain)
+            .controlSize(.regular)
             .accessibilityLabel(title)
         }
-        .padding(.horizontal, SettingsMetrics.horizontalPadding)
-        .padding(.vertical, SettingsMetrics.rowVerticalPadding)
     }
 
     private var title: String {
@@ -645,9 +540,5 @@ private struct DeleteAllCommandShortcutsRow: View {
             return "Confirm Delete All (\(secondsRemaining))"
         }
         return "Delete All"
-    }
-
-    private var backgroundStyle: AnyShapeStyle {
-        isConfirming ? AnyShapeStyle(MuxyTheme.diffRemoveBg) : AnyShapeStyle(.quaternary)
     }
 }
