@@ -7,6 +7,12 @@ enum MuxyTheme {
     @MainActor static var fg: Color { snapshot.fg }
     @MainActor static var fgMuted: Color { snapshot.fgMuted }
     @MainActor static var fgDim: Color { snapshot.fgDim }
+
+    @MainActor
+    static func dynamicForeground(_ color: Color, contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? snapshot.fg : color
+    }
+
     @MainActor static var surface: Color { snapshot.surface }
     @MainActor static var border: Color { snapshot.border }
     @MainActor static var hover: Color { snapshot.hover }

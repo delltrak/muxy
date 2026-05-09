@@ -61,7 +61,7 @@ struct PullRequestsListView: View {
                     Text(filterLabel(state.pullRequestStateFilter))
                         .font(.system(size: UIMetrics.fontFootnote, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 }
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .padding(.horizontal, UIMetrics.spacing3)
@@ -259,7 +259,7 @@ struct PullRequestRow: View {
                     ProgressView().controlSize(.mini)
                 } else {
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: UIMetrics.fontXS, weight: .bold))
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 }
                 Text("Checkout")
                     .font(.system(size: UIMetrics.fontCaption, weight: .medium))

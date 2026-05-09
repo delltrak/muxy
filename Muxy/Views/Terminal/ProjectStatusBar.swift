@@ -6,6 +6,8 @@ struct ProjectStatusBar: View {
     let isInteractive: Bool
     let richInputVisible: Bool
     @Binding var richInputFontSize: Double
+    @ScaledMetric(relativeTo: .footnote) private var barHeight: CGFloat = 28
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     private var richInputShortcutLabel: String {
         KeyBindingStore.shared.combo(for: .toggleRichInput).displayString
@@ -32,7 +34,7 @@ struct ProjectStatusBar: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(height: 28)
+        .frame(height: barHeight)
         .background(MuxyTheme.bg)
         .overlay(
             Rectangle().fill(MuxyTheme.border).frame(height: 1),
@@ -51,7 +53,7 @@ struct ProjectStatusBar: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        .foregroundStyle(MuxyTheme.fgMuted)
+        .foregroundStyle(MuxyTheme.dynamicForeground(MuxyTheme.fgMuted, contrast: colorSchemeContrast))
         .help(pane.currentWorkingDirectory ?? pane.projectPath)
     }
 
@@ -64,7 +66,7 @@ struct ProjectStatusBar: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        .foregroundStyle(MuxyTheme.fgMuted)
+        .foregroundStyle(MuxyTheme.dynamicForeground(MuxyTheme.fgMuted, contrast: colorSchemeContrast))
         .help("Branch: \(branch)")
     }
 

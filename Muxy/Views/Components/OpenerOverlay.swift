@@ -243,7 +243,7 @@ private struct OpenerRow: View {
                 .truncationMode(.middle)
             if case let .worktree(wt) = item, wt.isPrimary {
                 Text("PRIMARY")
-                    .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                    .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                     .tracking(0.5)
                     .foregroundStyle(MuxyTheme.fgDim)
                     .padding(.horizontal, UIMetrics.spacing2)

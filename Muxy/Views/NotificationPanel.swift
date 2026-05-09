@@ -22,6 +22,8 @@ struct NotificationPanelItem: Identifiable {
 struct NotificationPanel: View {
     @Environment(AppState.self) private var appState
     let onDismiss: () -> Void
+    @ScaledMetric(relativeTo: .body) private var panelWidth: CGFloat = 320
+    @ScaledMetric(relativeTo: .body) private var panelHeight: CGFloat = 400
 
     private var items: [NotificationPanelItem] {
         let store = NotificationStore.shared
@@ -50,7 +52,7 @@ struct NotificationPanel: View {
                 notificationList(currentItems)
             }
         }
-        .frame(width: UIMetrics.scaled(320), height: UIMetrics.scaled(400))
+        .frame(width: panelWidth, height: panelHeight)
     }
 
     private var header: some View {
@@ -189,7 +191,7 @@ private struct NotificationRow: View {
             onRemove()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .frame(width: UIMetrics.iconMD, height: UIMetrics.iconMD)
                 .background(MuxyTheme.surface, in: Circle())

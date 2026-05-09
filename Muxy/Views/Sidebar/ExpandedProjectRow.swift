@@ -584,7 +584,7 @@ private struct ExpandedNewWorktreeButton: View {
 private struct PrimaryBadge: View {
     var body: some View {
         Text("PRIMARY")
-            .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+            .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
             .tracking(0.4)
             .foregroundStyle(MuxyTheme.fg)
             .padding(.horizontal, UIMetrics.spacing2)

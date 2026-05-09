@@ -1,5 +1,6 @@
 import Foundation
 import os
+import SwiftUI
 
 private let logger = Logger(subsystem: "app.muxy", category: "UIScale")
 
@@ -73,6 +74,30 @@ final class UIScale {
         } catch {
             logger.error("Failed to save UI scale settings: \(error.localizedDescription)")
         }
+    }
+}
+
+extension UIScale {
+    static func dynamicTypeMultiplier(_ size: DynamicTypeSize) -> CGFloat {
+        switch size {
+        case .xSmall: 0.85
+        case .small: 0.92
+        case .medium: 1.0
+        case .large: 1.08
+        case .xLarge: 1.16
+        case .xxLarge: 1.24
+        case .xxxLarge: 1.32
+        case .accessibility1: 1.45
+        case .accessibility2: 1.6
+        case .accessibility3: 1.75
+        case .accessibility4: 1.9
+        case .accessibility5: 2.05
+        @unknown default: 1.0
+        }
+    }
+
+    static func multiplier(for preset: Preset, dynamicType: DynamicTypeSize) -> CGFloat {
+        preset.multiplier * dynamicTypeMultiplier(dynamicType)
     }
 }
 
