@@ -413,6 +413,7 @@ private struct EditorMarkdownModePicker: View {
 private struct EditorBreadcrumb: View {
     @Bindable var state: EditorTabState
     @ScaledMetric(relativeTo: .footnote) private var pathFontSize: CGFloat = 11
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     private var relativePath: String {
         let full = state.filePath
@@ -427,10 +428,10 @@ private struct EditorBreadcrumb: View {
         HStack(spacing: UIMetrics.spacing2) {
             Image(systemName: "doc.text")
                 .font(.system(size: UIMetrics.fontCaption))
-                .foregroundStyle(MuxyTheme.fgDim)
+                .foregroundStyle(MuxyTheme.dynamicForeground(MuxyTheme.fgDim, contrast: colorSchemeContrast))
             Text(relativePath)
                 .font(.system(size: pathFontSize))
-                .foregroundStyle(MuxyTheme.fgMuted)
+                .foregroundStyle(MuxyTheme.dynamicForeground(MuxyTheme.fgMuted, contrast: colorSchemeContrast))
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .textSelection(.enabled)
@@ -454,7 +455,7 @@ private struct EditorBreadcrumb: View {
             }
             Text("Ln \(state.cursorLine), Col \(state.cursorColumn)")
                 .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
-                .foregroundStyle(MuxyTheme.fgDim)
+                .foregroundStyle(MuxyTheme.dynamicForeground(MuxyTheme.fgDim, contrast: colorSchemeContrast))
         }
         .padding(.horizontal, UIMetrics.spacing5)
         .frame(height: UIMetrics.scaled(32))
