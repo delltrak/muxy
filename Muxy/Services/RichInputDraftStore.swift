@@ -56,11 +56,7 @@ final class RichInputDraftStore {
     }
 
     private func persist() {
-        do {
-            try store.save(drafts)
-        } catch {
-            logger.error("Failed to save rich input drafts: \(error.localizedDescription)")
-        }
+        store.saveAsync(drafts)
     }
 
     private func load() {

@@ -27,7 +27,7 @@ final class FileKeyBindingPersistence: KeyBindingPersisting {
     }
 
     func saveBindings(_ bindings: [KeyBinding]) throws {
-        try writer.save(bindings)
+        writer.saveAsync(bindings)
     }
 
     private static func mergeWithDefaults(_ saved: [KeyBinding]) -> [KeyBinding] {

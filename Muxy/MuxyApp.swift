@@ -344,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MobileServerService.shared.stopForTermination()
             RichInputDraftStore.shared.flush()
         }
+        CodableFileStorePersistence.flush()
     }
 
     @MainActor
