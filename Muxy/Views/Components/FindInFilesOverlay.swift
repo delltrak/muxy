@@ -110,16 +110,8 @@ struct FindInFilesOverlay: View {
     @ViewBuilder
     private var resultsList: some View {
         if groups.isEmpty, !isSearching {
-            VStack {
-                Spacer()
-                Text(query.trimmingCharacters(in: .whitespaces).count < TextSearchService.minQueryLength
-                    ? "Type at least \(TextSearchService.minQueryLength) characters"
-                    : "No matches found")
-                    .font(.system(size: UIMetrics.fontBody))
-                    .foregroundStyle(MuxyTheme.fgMuted)
-                Spacer()
-            }
-            .frame(maxHeight: .infinity)
+            emptyState
+                .frame(maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: true) {
@@ -151,6 +143,31 @@ struct FindInFilesOverlay: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if trimmed.count < TextSearchService.minQueryLength {
+                Text("Type at least \(TextSearchService.minQueryLength) characters")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(query)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func performSearch(debounce: Bool = true) {

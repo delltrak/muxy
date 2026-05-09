@@ -118,13 +118,7 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
     private var resultsList: some View {
         Group {
             if results.isEmpty, !isSearching {
-                VStack {
-                    Spacer()
-                    Text(query.isEmpty ? emptyLabel : noMatchLabel)
-                        .font(.system(size: UIMetrics.fontBody))
-                        .foregroundStyle(MuxyTheme.fgMuted)
-                    Spacer()
-                }
+                emptyState
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
@@ -149,6 +143,29 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
             }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if query.isEmpty {
+                Text(emptyLabel)
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(query)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func performSearch(debounce: Bool = true) {

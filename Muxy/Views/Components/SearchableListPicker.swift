@@ -41,10 +41,7 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
             Divider().overlay(MuxyTheme.border)
 
             if filteredItems.isEmpty {
-                Text(emptyLabel)
-                    .font(.system(size: UIMetrics.fontBody))
-                    .foregroundStyle(MuxyTheme.fgMuted)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
@@ -80,6 +77,29 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
         } else {
             Rectangle().fill(.regularMaterial)
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: UIMetrics.spacing3) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if searchText.isEmpty {
+                Text(emptyLabel)
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+            } else {
+                Text("No results for \"\(searchText)\"")
+                    .font(.system(size: UIMetrics.fontBody))
+                    .foregroundStyle(MuxyTheme.fg)
+                Text("Try a shorter or different query.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func moveHighlight(_ delta: Int) {
