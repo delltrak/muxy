@@ -72,4 +72,8 @@ final class PaneOwnershipStore {
         }
         deviceNames.removeValue(forKey: clientID)
     }
+
+    func panesOwned(by clientID: UUID) -> Set<UUID> {
+        ownedPanesByClient[clientID] ?? []
+    }
 }

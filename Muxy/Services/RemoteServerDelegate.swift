@@ -277,6 +277,7 @@ final class RemoteServerDelegate: MuxyRemoteServerDelegate {
         ensureTerminalView(paneID: paneID)
         let snapshotBytes = buildTerminalSnapshot(paneID: paneID)
         PaneOwnershipStore.shared.assign(paneID: paneID, to: clientID)
+        RemoteTerminalStreamer.shared.updateOwnership(paneID: paneID, hasRemoteOwner: true)
         if let bytes = snapshotBytes, !bytes.isEmpty {
             let dto = TerminalOutputEventDTO(paneID: paneID, bytes: bytes)
             let event = MuxyEvent(event: .terminalSnapshot, data: .terminalSnapshot(dto))
@@ -317,10 +318,15 @@ final class RemoteServerDelegate: MuxyRemoteServerDelegate {
             return
         }
         PaneOwnershipStore.shared.releaseToMac(paneID: paneID)
+        RemoteTerminalStreamer.shared.updateOwnership(paneID: paneID, hasRemoteOwner: false)
     }
 
     func clientDisconnected(clientID: UUID) {
+        let releasedPanes = PaneOwnershipStore.shared.panesOwned(by: clientID)
         PaneOwnershipStore.shared.releaseAll(clientID: clientID)
+        for paneID in releasedPanes {
+            RemoteTerminalStreamer.shared.updateOwnership(paneID: paneID, hasRemoteOwner: false)
+        }
     }
 
     func getPaneOwner(paneID: UUID) -> PaneOwnerDTO? {
