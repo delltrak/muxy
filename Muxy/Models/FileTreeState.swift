@@ -40,7 +40,7 @@ final class FileTreeState {
     var cutPaths: Set<String> = []
     var dropHighlightPath: String?
 
-    @ObservationIgnored private var watcher: FileSystemWatcher?
+    @ObservationIgnored private var watcherToken: FileSystemWatcherToken?
     @ObservationIgnored nonisolated(unsafe) private var remoteChangeObserver: NSObjectProtocol?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var statusTask: Task<Void, Never>?
@@ -328,7 +328,7 @@ final class FileTreeState {
     }
 
     private func installWatcher() {
-        watcher = FileSystemWatcher(directoryPath: rootPath) { [weak self] in
+        watcherToken = SharedFileSystemWatcher.shared.subscribe(path: rootPath) { [weak self] in
             Task { @MainActor [weak self] in
                 self?.refresh()
             }

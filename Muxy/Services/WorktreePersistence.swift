@@ -1,6 +1,6 @@
 import Foundation
 
-protocol WorktreePersisting {
+protocol WorktreePersisting: Sendable {
     func loadWorktrees(projectID: UUID) throws -> [Worktree]
     func saveWorktrees(_ worktrees: [Worktree], projectID: UUID) throws
     func removeWorktrees(projectID: UUID) throws

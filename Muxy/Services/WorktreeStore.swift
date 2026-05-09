@@ -25,22 +25,89 @@ final class WorktreeStore {
     }
 
     func loadAll(projects: [Project]) {
-        for project in projects {
-            do {
-                var loaded = try persistence.loadWorktrees(projectID: project.id)
-                var didChange = false
-                if !loaded.contains(where: \.isPrimary) {
-                    loaded.insert(makePrimary(for: project), at: 0)
-                    didChange = true
-                }
-                setWorktrees(sortPrimaryFirst(loaded), for: project.id)
-                guard didChange else { continue }
-                save(projectID: project.id)
-            } catch {
-                logger.error("Failed to load worktrees for project \(project.id): \(error)")
-                setWorktrees([makePrimary(for: project)], for: project.id)
-                save(projectID: project.id)
+        let primaries = projects.reduce(into: [UUID: Worktree]()) { result, project in
+            result[project.id] = makePrimary(for: project)
+        }
+        let outcomes = Self.parallelLoad(persistence: persistence, projects: projects, primaries: primaries)
+        for outcome in outcomes {
+            setWorktrees(sortPrimaryFirst(outcome.list), for: outcome.projectID)
+            if outcome.didMutate {
+                save(projectID: outcome.projectID)
             }
+        }
+    }
+
+    private struct LoadOutcome {
+        let projectID: UUID
+        let list: [Worktree]
+        let didMutate: Bool
+    }
+
+    private static func parallelLoad(
+        persistence: any WorktreePersisting,
+        projects: [Project],
+        primaries: [UUID: Worktree]
+    ) -> [LoadOutcome] {
+        guard !projects.isEmpty else { return [] }
+        let collector = LoadOutcomeCollector()
+        let group = DispatchGroup()
+        let queue = DispatchQueue(label: "app.muxy.worktree-store.load", attributes: .concurrent)
+        for project in projects {
+            let primary = primaries[project.id] ?? Worktree(
+                name: project.name,
+                path: project.path,
+                branch: nil,
+                source: .muxy,
+                isPrimary: true
+            )
+            group.enter()
+            queue.async {
+                let outcome = Self.computeLoadOutcome(
+                    persistence: persistence,
+                    project: project,
+                    primary: primary
+                )
+                collector.append(outcome)
+                group.leave()
+            }
+        }
+        group.wait()
+        return collector.snapshot()
+    }
+
+    private final class LoadOutcomeCollector: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [LoadOutcome] = []
+
+        func append(_ outcome: LoadOutcome) {
+            lock.lock()
+            values.append(outcome)
+            lock.unlock()
+        }
+
+        func snapshot() -> [LoadOutcome] {
+            lock.lock()
+            defer { lock.unlock() }
+            return values
+        }
+    }
+
+    private static func computeLoadOutcome(
+        persistence: any WorktreePersisting,
+        project: Project,
+        primary: Worktree
+    ) -> LoadOutcome {
+        do {
+            var loaded = try persistence.loadWorktrees(projectID: project.id)
+            var didMutate = false
+            if !loaded.contains(where: \.isPrimary) {
+                loaded.insert(primary, at: 0)
+                didMutate = true
+            }
+            return LoadOutcome(projectID: project.id, list: loaded, didMutate: didMutate)
+        } catch {
+            logger.error("Failed to load worktrees for project \(project.id): \(error)")
+            return LoadOutcome(projectID: project.id, list: [primary], didMutate: true)
         }
     }
 
@@ -195,21 +262,29 @@ final class WorktreeStore {
 
     static func cleanupOnDisk(for project: Project, knownWorktrees: [Worktree]) async {
         let secondaryWorktrees = knownWorktrees.filter(\.canBeRemoved)
-        for worktree in secondaryWorktrees {
-            await cleanupOnDisk(worktree: worktree, repoPath: project.path)
+        await withTaskGroup(of: Void.self) { group in
+            for worktree in secondaryWorktrees {
+                group.addTask {
+                    await cleanupOnDisk(worktree: worktree, repoPath: project.path)
+                }
+            }
         }
 
         let root = MuxyFileStorage.worktreeRoot(forProjectID: project.id)
         guard FileManager.default.fileExists(atPath: root.path) else { return }
         let children = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
-        for child in children {
-            let childPath = root.appendingPathComponent(child).path
-            try? await GitWorktreeService.shared.removeWorktree(
-                repoPath: project.path,
-                path: childPath,
-                force: true
-            )
-            try? FileManager.default.removeItem(atPath: childPath)
+        await withTaskGroup(of: Void.self) { group in
+            for child in children {
+                let childPath = root.appendingPathComponent(child).path
+                group.addTask {
+                    try? await GitWorktreeService.shared.removeWorktree(
+                        repoPath: project.path,
+                        path: childPath,
+                        force: true
+                    )
+                    try? FileManager.default.removeItem(atPath: childPath)
+                }
+            }
         }
         try? FileManager.default.removeItem(at: root)
     }

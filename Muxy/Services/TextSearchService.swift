@@ -15,10 +15,17 @@ enum TextSearchService {
     static let maxResults = 200
     static let minQueryLength = 2
 
+    private static let inFlight = InFlightProcess()
+
     static func search(query: String, in projectPath: String) async -> [TextSearchMatch] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard trimmed.count >= minQueryLength else { return [] }
+        guard trimmed.count >= minQueryLength else {
+            inFlight.cancelCurrent()
+            return []
+        }
         guard let executable = ripgrepExecutableURL() else { return [] }
+
+        inFlight.cancelCurrent()
 
         return await withCheckedContinuation { continuation in
             let process = Process()
@@ -43,16 +50,18 @@ enum TextSearchService {
                 }
             }
 
-            process.terminationHandler = { _ in
+            process.terminationHandler = { finished in
                 handle.readabilityHandler = nil
                 if let remaining = try? handle.readToEnd(), let chunk = String(data: remaining, encoding: .utf8) {
                     _ = resultsBox.append(chunk: chunk, projectPath: projectPath, limit: maxResults)
                 }
+                inFlight.clear(if: finished)
                 continuation.resume(returning: resultsBox.take())
             }
 
             do {
                 try process.run()
+                inFlight.set(process)
             } catch {
                 handle.readabilityHandler = nil
                 continuation.resume(returning: [])
@@ -138,6 +147,34 @@ enum TextSearchService {
             }
         }
         return characterCount + 1
+    }
+}
+
+final class InFlightProcess: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+
+    func set(_ process: Process) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.process = process
+    }
+
+    func clear(if process: Process) {
+        lock.lock()
+        defer { lock.unlock() }
+        if self.process === process {
+            self.process = nil
+        }
+    }
+
+    func cancelCurrent() {
+        lock.lock()
+        let current = process
+        process = nil
+        lock.unlock()
+        guard let current, current.isRunning else { return }
+        current.terminate()
     }
 }
 

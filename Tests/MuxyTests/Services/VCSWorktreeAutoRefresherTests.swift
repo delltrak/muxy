@@ -200,7 +200,8 @@ private final class ProjectPersistenceStub: ProjectPersisting {
     func saveProjects(_ projects: [Project]) throws { self.projects = projects }
 }
 
-private final class WorktreePersistenceStub: WorktreePersisting {
+private final class WorktreePersistenceStub: WorktreePersisting, @unchecked Sendable {
+    private let lock = NSLock()
     private var storage: [UUID: [Worktree]]
 
     init(initial: [UUID: [Worktree]] = [:]) {
@@ -208,14 +209,20 @@ private final class WorktreePersistenceStub: WorktreePersisting {
     }
 
     func loadWorktrees(projectID: UUID) throws -> [Worktree] {
-        storage[projectID] ?? []
+        lock.lock()
+        defer { lock.unlock() }
+        return storage[projectID] ?? []
     }
 
     func saveWorktrees(_ worktrees: [Worktree], projectID: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
         storage[projectID] = worktrees
     }
 
     func removeWorktrees(projectID: UUID) throws {
+        lock.lock()
+        defer { lock.unlock() }
         storage.removeValue(forKey: projectID)
     }
 }
