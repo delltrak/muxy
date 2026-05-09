@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 
 @MainActor
 final class TerminalViewRegistry {
@@ -57,6 +58,12 @@ final class TerminalViewRegistry {
     func applyColorSchemeToAllViews(isDark: Bool) {
         for view in views.values {
             view.applyColorScheme(isDark: isDark)
+        }
+    }
+
+    func applyConfigUpdateToAllViews(_ config: ghostty_config_t) {
+        for view in views.values {
+            view.applyConfigUpdate(config)
         }
     }
 }

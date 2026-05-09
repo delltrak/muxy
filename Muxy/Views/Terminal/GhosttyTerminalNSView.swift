@@ -288,6 +288,12 @@ final class GhosttyTerminalNSView: NSView {
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
     }
 
+    func applyConfigUpdate(_ config: ghostty_config_t) {
+        guard let surface else { return }
+        ghostty_surface_update_config(surface, config)
+        ghostty_surface_refresh(surface)
+    }
+
     private func updateMetalLayerSize(deferred: Bool) {
         if deferred {
             delayedResizeWorkItem?.cancel()

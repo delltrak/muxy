@@ -34,21 +34,47 @@ final class MuxyConfig {
 
     func updateConfigValue(_ key: String, value: String) {
         let entry = "\(key) = \(value)"
-        var content = readGhosttyConfig()
-        var lines = content.components(separatedBy: "\n")
-
-        if let index = findConfigLineIndex(for: key, in: lines) {
-            lines[index] = entry
-        } else {
-            lines.insert(entry, at: 0)
-        }
-
-        content = lines.joined(separator: "\n")
+        var lines = readGhosttyConfig().components(separatedBy: "\n")
+        lines.removeAll { isConfigLine($0, matchingKey: key) }
+        if lines.last?.isEmpty == false { lines.append("") }
+        lines.append(entry)
         do {
-            try writeGhosttyConfig(content)
+            try writeGhosttyConfig(lines.joined(separator: "\n"))
         } catch {
             logger.error("Failed to write config: \(error)")
         }
+    }
+
+    func applyThemeValue(_ value: String) {
+        let entry = "theme = \(value)"
+        var lines = readGhosttyConfig().components(separatedBy: "\n")
+        let colorKeys: Set<String> = [
+            "theme",
+            "background",
+            "foreground",
+            "cursor-color",
+            "cursor-text",
+            "selection-background",
+            "selection-foreground",
+            "palette",
+        ]
+        lines.removeAll { line in
+            colorKeys.contains { isConfigLine(line, matchingKey: $0) }
+        }
+        if lines.last?.isEmpty == false { lines.append("") }
+        lines.append(entry)
+        do {
+            try writeGhosttyConfig(lines.joined(separator: "\n"))
+        } catch {
+            logger.error("Failed to write config: \(error)")
+        }
+    }
+
+    private func isConfigLine(_ line: String, matchingKey key: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix(key) else { return false }
+        let after = trimmed.dropFirst(key.count).trimmingCharacters(in: .whitespaces)
+        return after.hasPrefix("=")
     }
 
     func configValue(for key: String) -> String? {

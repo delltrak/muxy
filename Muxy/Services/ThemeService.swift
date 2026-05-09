@@ -188,7 +188,7 @@ final class ThemeService {
 
     func applyTheme(_ name: String) {
         let sanitized = sanitizedThemeName(name)
-        config.updateConfigValue("theme", value: "\"\(sanitized)\"")
+        config.applyThemeValue(sanitized)
         cachedColors = nil
         ghostty.reloadConfig()
         NotificationCenter.default.post(name: .themeDidChange, object: nil)
@@ -197,7 +197,7 @@ final class ThemeService {
     func applyTheme(dark darkName: String, light lightName: String) {
         let dark = sanitizedThemeName(darkName)
         let light = sanitizedThemeName(lightName)
-        config.updateConfigValue("theme", value: "dark:\"\(dark)\",light:\"\(light)\"")
+        config.applyThemeValue("light:\(light),dark:\(dark)")
         cachedColors = nil
         ghostty.reloadConfig()
         NotificationCenter.default.post(name: .themeDidChange, object: nil)
