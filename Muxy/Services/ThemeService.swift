@@ -44,6 +44,9 @@ final class ThemeService {
     @ObservationIgnored private let config: MuxyConfig
     @ObservationIgnored private let ghostty: GhosttyService
     @ObservationIgnored private var cachedColors: CachedThemeColors?
+    @ObservationIgnored private var discoveredThemesCache: [ThemePreview]?
+    @ObservationIgnored private var themePreviewCache: [String: ThemePreview] = [:]
+    @ObservationIgnored private var themeDirectoryWatchers: [FileSystemWatcher] = []
 
     private struct CachedThemeColors {
         let name: String
@@ -55,10 +58,43 @@ final class ThemeService {
     init(config: MuxyConfig = .shared, ghostty: GhosttyService = .shared) {
         self.config = config
         self.ghostty = ghostty
+        installThemeDirectoryWatchers()
     }
 
     func loadThemes() async -> [ThemePreview] {
-        await Task.detached { Self.discoverThemes() }.value
+        if let cached = discoveredThemesCache { return cached }
+        let discovered = await Task.detached { Self.discoverThemes() }.value
+        discoveredThemesCache = discovered
+        return discovered
+    }
+
+    private func installThemeDirectoryWatchers() {
+        for path in Self.themeDirectories() {
+            guard let watcher = FileSystemWatcher(directoryPath: path, handler: { [weak self] in
+                Task { @MainActor in
+                    self?.invalidateThemeCaches()
+                }
+            })
+            else { continue }
+            themeDirectoryWatchers.append(watcher)
+        }
+    }
+
+    private func invalidateThemeCaches() {
+        discoveredThemesCache = nil
+        themePreviewCache = [:]
+        cachedColors = nil
+    }
+
+    private func cachedThemePreview(named name: String) -> ThemePreview? {
+        if let cached = themePreviewCache[name] { return cached }
+        if let discovered = discoveredThemesCache?.first(where: { $0.name == name }) {
+            themePreviewCache[name] = discovered
+            return discovered
+        }
+        guard let preview = Self.themePreview(named: name) else { return nil }
+        themePreviewCache[name] = preview
+        return preview
     }
 
     func currentThemeName() -> String? {
@@ -86,7 +122,7 @@ final class ThemeService {
 
     func activeThemePreview() -> ThemePreview? {
         guard let name = activeThemeName() else { return nil }
-        return Self.themePreview(named: name)
+        return cachedThemePreview(named: name)
     }
 
     func activeAppearance() -> ThemeAppearance {
@@ -95,7 +131,7 @@ final class ThemeService {
 
     func activeThemePreview(for appearance: ThemeAppearance) -> ThemePreview? {
         guard let name = currentThemeSelection()?.resolvedName(isDark: appearance == .dark) else { return nil }
-        return Self.themePreview(named: name)
+        return cachedThemePreview(named: name)
     }
 
     func currentThemeColors() -> DeviceThemeEventDTO? {
@@ -103,7 +139,7 @@ final class ThemeService {
         if let cached = cachedColors, cached.name == name {
             return DeviceThemeEventDTO(fg: cached.fg, bg: cached.bg, palette: cached.palette)
         }
-        guard let theme = Self.themePreview(named: name) else { return nil }
+        guard let theme = cachedThemePreview(named: name) else { return nil }
         let fg = Self.rgb(from: theme.foreground)
         let bg = Self.rgb(from: theme.background)
         let palette = theme.palette.count == 16
