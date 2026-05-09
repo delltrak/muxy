@@ -50,10 +50,14 @@ struct SearchableListPicker<Item: Identifiable, RowContent: View>: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(filteredItems.enumerated()), id: \.element.id) { index, item in
-                                row(item, index == highlightedIndex)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onSelect(item) }
-                                    .id(item.id)
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    row(item, index == highlightedIndex)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(item.id)
                             }
                         }
                         .padding(.vertical, UIMetrics.spacing2)

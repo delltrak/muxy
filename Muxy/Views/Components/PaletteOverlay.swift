@@ -108,10 +108,14 @@ struct PaletteOverlay<Item: Identifiable & Sendable>: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 0) {
                             ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                                row(item, index == highlightedIndex)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onSelect(item) }
-                                    .id(item.id)
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    row(item, index == highlightedIndex)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .id(item.id)
                             }
                         }
                     }

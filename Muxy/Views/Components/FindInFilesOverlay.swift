@@ -98,12 +98,16 @@ struct FindInFilesOverlay: View {
                         ForEach(groups) { group in
                             FileGroupHeader(group: group)
                             ForEach(group.matches) { match in
-                                MatchRow(
-                                    match: match,
-                                    isHighlighted: match.id == highlightedMatchID
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture { onSelect(match) }
+                                Button {
+                                    onSelect(match)
+                                } label: {
+                                    MatchRow(
+                                        match: match,
+                                        isHighlighted: match.id == highlightedMatchID
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                                 .id(match.id)
                             }
                         }

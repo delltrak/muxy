@@ -150,13 +150,17 @@ struct OpenerOverlay: View {
                                 if let firstOther = firstNonRecentIndex, index == firstOther {
                                     OpenerSectionHeader(title: "All")
                                 }
-                                OpenerRow(
-                                    item: item,
-                                    isHighlighted: index == highlightedIndex,
-                                    isActive: isActive(item)
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture { onSelect(item) }
+                                Button {
+                                    onSelect(item)
+                                } label: {
+                                    OpenerRow(
+                                        item: item,
+                                        isHighlighted: index == highlightedIndex,
+                                        isActive: isActive(item)
+                                    )
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                                 .id(item.id)
                             }
                         }
