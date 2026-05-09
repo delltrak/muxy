@@ -157,6 +157,8 @@ final class WorktreeStore {
         save(projectID: projectID)
         for worktree in removed {
             VCSStateStore.shared.remove(path: worktree.path)
+            BranchCache.shared.invalidate(path: worktree.path)
+            GitMetadataCache.shared.invalidate(path: worktree.path)
         }
     }
 

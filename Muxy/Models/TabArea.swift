@@ -3,11 +3,20 @@ import Foundation
 @MainActor
 @Observable
 final class TabArea: Identifiable {
+    static let tabHistoryCap = 32
+
     let id: UUID
     let projectPath: String
     var tabs: [TerminalTab] = []
     var activeTabID: UUID?
     private var tabHistory: [UUID] = []
+
+    private func appendTabHistory(_ tabID: UUID) {
+        tabHistory.append(tabID)
+        if tabHistory.count > Self.tabHistoryCap {
+            tabHistory.removeFirst(tabHistory.count - Self.tabHistoryCap)
+        }
+    }
 
     init(projectPath: String) {
         id = UUID()
@@ -145,7 +154,7 @@ final class TabArea: Identifiable {
     private func insertTab(_ tab: TerminalTab) {
         tabs.append(tab)
         if let current = activeTabID {
-            tabHistory.append(current)
+            appendTabHistory(current)
         }
         activeTabID = tab.id
     }
@@ -159,7 +168,7 @@ final class TabArea: Identifiable {
         let insertIndex = max(desiredIndex, firstUnpinnedIndex)
         tabs.insert(tab, at: insertIndex)
         if let current = activeTabID {
-            tabHistory.append(current)
+            appendTabHistory(current)
         }
         activeTabID = tab.id
     }
@@ -172,7 +181,7 @@ final class TabArea: Identifiable {
     func selectTab(_ tabID: UUID) {
         guard activeTabID != tabID else { return }
         if let current = activeTabID, current != tabID {
-            tabHistory.append(current)
+            appendTabHistory(current)
         }
         activeTabID = tabID
     }
@@ -224,7 +233,7 @@ final class TabArea: Identifiable {
         let insertIndex = tab.isPinned ? firstUnpinnedIndex : tabs.count
         tabs.insert(tab, at: insertIndex)
         if let current = activeTabID {
-            tabHistory.append(current)
+            appendTabHistory(current)
         }
         activeTabID = tab.id
     }
