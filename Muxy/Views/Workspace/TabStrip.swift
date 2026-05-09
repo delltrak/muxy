@@ -568,14 +568,17 @@ private struct TabCell: View {
     private var trailingAccessory: some View {
         ZStack {
             if !tab.isPinned {
-                Image(systemName: "xmark")
-                    .font(.system(size: UIMetrics.fontCaption, weight: .bold))
-                    .foregroundStyle(MuxyTheme.fgDim)
-                    .opacity(closeButtonVisible ? 1 : 0)
-                    .allowsHitTesting(closeButtonVisible)
-                    .onTapGesture(perform: onClose)
-                    .accessibilityLabel(Text("Close Tab"))
-                    .accessibilityAddTraits(.isButton)
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: UIMetrics.fontCaption, weight: .bold))
+                        .foregroundStyle(MuxyTheme.fgDim)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .opacity(closeButtonVisible ? 1 : 0)
+                .allowsHitTesting(closeButtonVisible)
+                .accessibilityLabel(Text("Close Tab"))
+                .help("Close Tab")
             }
         }
         .frame(width: UIMetrics.iconMD, height: UIMetrics.iconMD)

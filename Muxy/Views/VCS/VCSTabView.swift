@@ -517,6 +517,7 @@ struct VCSTabView: View {
                 if state.aheadBehind.behind > 0 {
                     Text("\(state.aheadBehind.behind)")
                         .font(.system(size: UIMetrics.fontCaption, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(MuxyTheme.bg)
                         .padding(.horizontal, UIMetrics.scaled(5))
                         .padding(.vertical, UIMetrics.scaled(1))
@@ -552,6 +553,7 @@ struct VCSTabView: View {
                 if state.aheadBehind.ahead > 0 {
                     Text("\(state.aheadBehind.ahead)")
                         .font(.system(size: UIMetrics.fontCaption, weight: .bold, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(MuxyTheme.bg)
                         .padding(.horizontal, UIMetrics.scaled(5))
                         .padding(.vertical, UIMetrics.scaled(1))
@@ -1678,26 +1680,33 @@ private struct FileRow: View {
 
     var body: some View {
         HStack(spacing: UIMetrics.spacing4) {
-            Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
-                .foregroundStyle(MuxyTheme.fgDim)
-                .frame(width: UIMetrics.iconSM)
+            Button(action: onToggle) {
+                HStack(spacing: UIMetrics.spacing4) {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
+                        .foregroundStyle(MuxyTheme.fgDim)
+                        .frame(width: UIMetrics.iconSM)
 
-            Text(statusText)
-                .font(.system(size: UIMetrics.fontFootnote, weight: .bold, design: .monospaced))
-                .foregroundStyle(statusColor)
-                .frame(width: UIMetrics.iconMD)
+                    Text(statusText)
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .bold, design: .monospaced))
+                        .foregroundStyle(statusColor)
+                        .frame(width: UIMetrics.iconMD)
 
-            FileDiffIcon()
-                .stroke(statusColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-                .frame(width: UIMetrics.scaled(11), height: UIMetrics.scaled(11))
+                    FileDiffIcon()
+                        .stroke(statusColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                        .frame(width: UIMetrics.scaled(11), height: UIMetrics.scaled(11))
 
-            Text(displayPath)
-                .font(.system(size: UIMetrics.fontBody, weight: .medium))
-                .foregroundStyle(MuxyTheme.fg)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(displayPath)
+                        .font(.system(size: UIMetrics.fontBody, weight: .medium))
+                        .foregroundStyle(MuxyTheme.fg)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(displayPath), \(expanded ? "expanded" : "collapsed")")
 
             if hovered {
                 actionButtons
@@ -1712,11 +1721,13 @@ private struct FileRow: View {
                     Text("+\(additions)")
                         .font(.system(size: UIMetrics.fontBody, weight: .semibold, design: .monospaced))
                         .foregroundStyle(MuxyTheme.diffAddFg)
+                        .monospacedDigit()
                 }
                 if let deletions = stats.deletions {
                     Text("-\(deletions)")
                         .font(.system(size: UIMetrics.fontBody, weight: .semibold, design: .monospaced))
                         .foregroundStyle(MuxyTheme.diffRemoveFg)
+                        .monospacedDigit()
                 }
             }
         }
@@ -1724,9 +1735,7 @@ private struct FileRow: View {
         .padding(.trailing, UIMetrics.spacing5)
         .frame(height: UIMetrics.scaled(34))
         .background(MuxyTheme.bg)
-        .contentShape(Rectangle())
         .onHover { hovered = $0 }
-        .onTapGesture(perform: onToggle)
     }
 
     private var actionButtons: some View {
@@ -1756,35 +1765,39 @@ private struct FolderRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        HStack(spacing: UIMetrics.spacing4) {
-            Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
-                .foregroundStyle(MuxyTheme.fgDim)
-                .frame(width: UIMetrics.iconSM)
+        Button(action: onToggle) {
+            HStack(spacing: UIMetrics.spacing4) {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
+                    .foregroundStyle(MuxyTheme.fgDim)
+                    .frame(width: UIMetrics.iconSM)
 
-            Image(systemName: "folder")
-                .font(.system(size: UIMetrics.fontFootnote, weight: .semibold))
-                .foregroundStyle(MuxyTheme.fgMuted)
-                .frame(width: UIMetrics.scaled(11), height: UIMetrics.scaled(11))
+                Image(systemName: "folder")
+                    .font(.system(size: UIMetrics.fontFootnote, weight: .semibold))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+                    .frame(width: UIMetrics.scaled(11), height: UIMetrics.scaled(11))
 
-            Text(name)
-                .font(.system(size: UIMetrics.fontBody, weight: .medium))
-                .foregroundStyle(MuxyTheme.fg)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                Text(name)
+                    .font(.system(size: UIMetrics.fontBody, weight: .medium))
+                    .foregroundStyle(MuxyTheme.fg)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-            Text("\(fileCount) \(fileCount == 1 ? "file" : "files")")
-                .font(.system(size: UIMetrics.fontCaption, weight: .regular))
-                .foregroundStyle(MuxyTheme.fgDim)
-                .lineLimit(1)
+                Text("\(fileCount) \(fileCount == 1 ? "file" : "files")")
+                    .font(.system(size: UIMetrics.fontCaption, weight: .regular))
+                    .foregroundStyle(MuxyTheme.fgDim)
+                    .lineLimit(1)
+                    .monospacedDigit()
 
-            Spacer()
+                Spacer()
+            }
+            .padding(.leading, UIMetrics.spacing5 + CGFloat(depth) * UIMetrics.iconMD)
+            .padding(.trailing, UIMetrics.spacing5)
+            .frame(height: UIMetrics.scaled(30))
+            .background(MuxyTheme.bg)
+            .contentShape(Rectangle())
         }
-        .padding(.leading, UIMetrics.spacing5 + CGFloat(depth) * UIMetrics.iconMD)
-        .padding(.trailing, UIMetrics.spacing5)
-        .frame(height: UIMetrics.scaled(30))
-        .background(MuxyTheme.bg)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onToggle)
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(name), \(fileCount) files, \(expanded ? "expanded" : "collapsed")")
     }
 }

@@ -124,46 +124,7 @@ struct ExpandedProjectRow: View {
     }
 
     private var projectHeader: some View {
-        HStack(spacing: UIMetrics.spacing4) {
-            projectIcon
-
-            VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
-                Text(project.name)
-                    .font(.system(size: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium))
-                    .foregroundStyle(MuxyTheme.fg)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                if isGitRepo, let worktree = activeWorktree {
-                    Text(worktree.isPrimary ? "primary" : worktree.name)
-                        .font(.system(size: UIMetrics.fontFootnote, design: .monospaced))
-                        .foregroundStyle(MuxyTheme.fg)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-
-            Spacer(minLength: UIMetrics.spacing2)
-
-            if isGitRepo {
-                worktreeChevron
-            }
-        }
-        .padding(UIMetrics.spacing2)
-        .background(headerBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
-        .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(projectHeaderAccessibilityLabel)
-        .accessibilityAddTraits(isActive ? .isSelected : [])
-        .accessibilityAddTraits(.isButton)
-        .onHover { hovering in
-            guard !isAnyDragging else { return }
-            hovered = hovering
-        }
-        .onChange(of: isAnyDragging) { _, dragging in
-            if dragging { hovered = false }
-        }
-        .onTapGesture {
+        Button {
             guard !isAnyDragging else { return }
             if isActive, isGitRepo {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -172,6 +133,46 @@ struct ExpandedProjectRow: View {
             } else {
                 onSelect()
             }
+        } label: {
+            HStack(spacing: UIMetrics.spacing4) {
+                projectIcon
+
+                VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
+                    Text(project.name)
+                        .font(.system(size: UIMetrics.fontEmphasis, weight: isActive ? .semibold : .medium))
+                        .foregroundStyle(MuxyTheme.fg)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    if isGitRepo, let worktree = activeWorktree {
+                        Text(worktree.isPrimary ? "primary" : worktree.name)
+                            .font(.system(size: UIMetrics.fontFootnote, design: .monospaced))
+                            .foregroundStyle(MuxyTheme.fg)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+
+                Spacer(minLength: UIMetrics.spacing2)
+
+                if isGitRepo {
+                    worktreeChevron
+                }
+            }
+            .padding(UIMetrics.spacing2)
+            .background(headerBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
+            .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusLG))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(projectHeaderAccessibilityLabel)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+        .onHover { hovering in
+            guard !isAnyDragging else { return }
+            hovered = hovering
+        }
+        .onChange(of: isAnyDragging) { _, dragging in
+            if dragging { hovered = false }
         }
         .overlay {
             if showShortcutBadge, let shortcutIndex,
@@ -448,52 +449,54 @@ private struct ExpandedWorktreeRow: View {
     }
 
     var body: some View {
-        HStack(spacing: UIMetrics.spacing3) {
-            leadingIndicator
-
-            if isRenaming {
-                TextField("", text: $renameText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: UIMetrics.fontFootnote, weight: .medium))
-                    .foregroundStyle(MuxyTheme.fg)
-                    .focused($renameFieldFocused)
-                    .onSubmit { commitRename() }
-                    .onExitCommand { cancelRename() }
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: UIMetrics.spacing2) {
-                        Text(displayName)
-                            .font(.system(size: UIMetrics.fontBody, weight: activeStyle ? .semibold : .regular))
-                            .foregroundStyle(MuxyTheme.fg)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        if worktree.isPrimary {
-                            PrimaryBadge()
-                        }
-                    }
-
-                    if let branch = branchLabel {
-                        Text(branch)
-                            .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
-                            .foregroundStyle(MuxyTheme.fg)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-            }
-
-            Spacer(minLength: UIMetrics.spacing1)
-        }
-        .padding(.horizontal, UIMetrics.spacing4)
-        .padding(.vertical, UIMetrics.scaled(7))
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
-        .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
-        .onHover { hovered = $0 }
-        .onTapGesture {
+        Button {
             guard !isRenaming else { return }
             onSelect()
+        } label: {
+            HStack(spacing: UIMetrics.spacing3) {
+                leadingIndicator
+
+                if isRenaming {
+                    TextField("", text: $renameText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: UIMetrics.fontFootnote, weight: .medium))
+                        .foregroundStyle(MuxyTheme.fg)
+                        .focused($renameFieldFocused)
+                        .onSubmit { commitRename() }
+                        .onExitCommand { cancelRename() }
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: UIMetrics.spacing2) {
+                            Text(displayName)
+                                .font(.system(size: UIMetrics.fontBody, weight: activeStyle ? .semibold : .regular))
+                                .foregroundStyle(MuxyTheme.fg)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            if worktree.isPrimary {
+                                PrimaryBadge()
+                            }
+                        }
+
+                        if let branch = branchLabel {
+                            Text(branch)
+                                .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
+                                .foregroundStyle(MuxyTheme.fg)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                }
+
+                Spacer(minLength: UIMetrics.spacing1)
+            }
+            .padding(.horizontal, UIMetrics.spacing4)
+            .padding(.vertical, UIMetrics.scaled(7))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
+            .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
         }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
         .contextMenu {
             if worktree.isPrimary {
                 Text("Primary worktree").font(.system(size: UIMetrics.fontFootnote))
@@ -510,7 +513,6 @@ private struct ExpandedWorktreeRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(worktreeAccessibilityLabel)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityAddTraits(.isButton)
     }
 
     private var worktreeAccessibilityLabel: String {

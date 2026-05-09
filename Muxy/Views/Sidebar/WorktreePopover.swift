@@ -163,54 +163,56 @@ private struct WorktreePopoverRow: View {
     }
 
     var body: some View {
-        HStack(spacing: UIMetrics.spacing5) {
-            indicator
-            VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
-                if isRenaming {
-                    TextField("", text: $renameText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: UIMetrics.fontBody, weight: .semibold))
-                        .foregroundStyle(MuxyTheme.fg)
-                        .focused($renameFieldFocused)
-                        .onSubmit { commitRename() }
-                        .onExitCommand { cancelRename() }
-                } else {
-                    HStack(spacing: UIMetrics.spacing3) {
-                        Text(displayName)
-                            .font(.system(size: UIMetrics.fontBody, weight: selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? MuxyTheme.fg : MuxyTheme.fg.opacity(0.9))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        if worktree.isPrimary {
-                            Text("PRIMARY")
-                                .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
-                                .tracking(0.5)
-                                .foregroundStyle(MuxyTheme.fgDim)
-                                .padding(.horizontal, UIMetrics.spacing2)
-                                .padding(.vertical, UIMetrics.scaled(1))
-                                .background(MuxyTheme.surface, in: Capsule())
-                        }
-                    }
-                }
-                if let branch = branchSubtitle, !isRenaming {
-                    Text(branch)
-                        .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
-                        .foregroundStyle(MuxyTheme.fgDim)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-            Spacer(minLength: 4)
-        }
-        .padding(.horizontal, UIMetrics.spacing5)
-        .padding(.vertical, UIMetrics.scaled(7))
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
-        .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
-        .onHover { hovered = $0 }
-        .onTapGesture {
+        Button {
             guard !isRenaming else { return }
             onSelect()
+        } label: {
+            HStack(spacing: UIMetrics.spacing5) {
+                indicator
+                VStack(alignment: .leading, spacing: UIMetrics.scaled(1)) {
+                    if isRenaming {
+                        TextField("", text: $renameText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: UIMetrics.fontBody, weight: .semibold))
+                            .foregroundStyle(MuxyTheme.fg)
+                            .focused($renameFieldFocused)
+                            .onSubmit { commitRename() }
+                            .onExitCommand { cancelRename() }
+                    } else {
+                        HStack(spacing: UIMetrics.spacing3) {
+                            Text(displayName)
+                                .font(.system(size: UIMetrics.fontBody, weight: selected ? .semibold : .medium))
+                                .foregroundStyle(selected ? MuxyTheme.fg : MuxyTheme.fg.opacity(0.9))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            if worktree.isPrimary {
+                                Text("PRIMARY")
+                                    .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
+                                    .tracking(0.5)
+                                    .foregroundStyle(MuxyTheme.fgDim)
+                                    .padding(.horizontal, UIMetrics.spacing2)
+                                    .padding(.vertical, UIMetrics.scaled(1))
+                                    .background(MuxyTheme.surface, in: Capsule())
+                            }
+                        }
+                    }
+                    if let branch = branchSubtitle, !isRenaming {
+                        Text(branch)
+                            .font(.system(size: UIMetrics.fontCaption, design: .monospaced))
+                            .foregroundStyle(MuxyTheme.fgDim)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 4)
+            }
+            .padding(.horizontal, UIMetrics.spacing5)
+            .padding(.vertical, UIMetrics.scaled(7))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
+            .contentShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
         }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
         .contextMenu {
             if worktree.isPrimary {
                 Text("Primary worktree").font(.system(size: UIMetrics.fontFootnote))
@@ -224,6 +226,7 @@ private struct WorktreePopoverRow: View {
                 Text("External worktree").font(.system(size: UIMetrics.fontFootnote))
             }
         }
+        .accessibilityLabel(displayName)
     }
 
     private var indicator: some View {

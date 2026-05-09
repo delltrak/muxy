@@ -78,14 +78,17 @@ struct NotificationPanel: View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(currentItems) { item in
-                    NotificationRow(item: item, isHighlighted: false, onRemove: {
-                        NotificationStore.shared.remove(item.id)
-                    })
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectItem(item) }
+                    Button {
+                        selectItem(item)
+                    } label: {
+                        NotificationRow(item: item, isHighlighted: false, onRemove: {
+                            NotificationStore.shared.remove(item.id)
+                        })
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(notificationAccessibilityLabel(for: item))
-                    .accessibilityAddTraits(.isButton)
                 }
             }
             .padding(.vertical, UIMetrics.spacing2)
