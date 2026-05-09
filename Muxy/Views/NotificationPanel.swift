@@ -189,7 +189,7 @@ private struct NotificationRow: View {
             onRemove()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: UIMetrics.fontMicro, weight: .bold))
+                .font(.system(size: UIMetrics.fontFootnote, weight: .bold))
                 .foregroundStyle(MuxyTheme.fgMuted)
                 .frame(width: UIMetrics.iconMD, height: UIMetrics.iconMD)
                 .background(MuxyTheme.surface, in: Circle())
