@@ -50,3 +50,23 @@ private enum LiquidGlassApplier {
         }
     }
 }
+
+extension View {
+    @ViewBuilder
+    func muxyProminentButtonStyle() -> some View {
+        if #available(macOS 26.0, *) {
+            buttonStyle(.glassProminent)
+        } else {
+            buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder
+    func muxyGlassButtonStyle() -> some View {
+        if #available(macOS 26.0, *) {
+            buttonStyle(.glass)
+        } else {
+            buttonStyle(.bordered)
+        }
+    }
+}

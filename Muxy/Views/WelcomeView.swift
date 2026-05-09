@@ -25,6 +25,8 @@ struct WelcomeView: View {
                 .font(.system(size: UIMetrics.scaled(72), weight: .light))
                 .foregroundStyle(MuxyTheme.accent)
                 .symbolRenderingMode(.hierarchical)
+                .padding(UIMetrics.scaled(32))
+                .muxyGlass(.tinted(MuxyTheme.accent.opacity(0.08)), in: Circle())
                 .accessibilityHidden(true)
 
             VStack(spacing: UIMetrics.spacing4) {
@@ -54,7 +56,7 @@ struct WelcomeView: View {
                             .opacity(0.72)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .muxyProminentButtonStyle()
                 .controlSize(.large)
 
                 Button {
@@ -65,6 +67,7 @@ struct WelcomeView: View {
                         Text("Show Quick Start")
                     }
                 }
+                .muxyGlassButtonStyle()
                 .controlSize(.large)
             }
 
