@@ -22,6 +22,12 @@ final class FileTreeState {
         let token: UUID
     }
 
+    struct FlattenedEntry: Identifiable {
+        let entry: FileTreeEntry
+        let depth: Int
+        var id: String { entry.absolutePath }
+    }
+
     let rootPath: String
     private(set) var rootEntries: [FileTreeEntry] = []
     private(set) var children: [String: [FileTreeEntry]] = [:]
@@ -30,7 +36,10 @@ final class FileTreeState {
     private(set) var hasLoadedRoot = false
     private(set) var statuses: [String: FileStatus] = [:]
     private(set) var dirHasChange: Set<String> = []
-    var showOnlyChanges = false
+    var showOnlyChanges = false {
+        didSet { invalidateFlattenedCache() }
+    }
+
     var selectedFilePath: String?
     var selectedPaths: Set<String> = []
     var selectionAnchorPath: String?
@@ -41,6 +50,7 @@ final class FileTreeState {
     var dropHighlightPath: String?
 
     @ObservationIgnored private var watcherToken: FileSystemWatcherToken?
+    @ObservationIgnored private var flattenedCache: [FlattenedEntry]?
     @ObservationIgnored nonisolated(unsafe) private var remoteChangeObserver: NSObjectProtocol?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var statusTask: Task<Void, Never>?
@@ -87,6 +97,7 @@ final class FileTreeState {
         guard normalized != normalizedRootPath else { return }
         guard !expanded.contains(normalized) else { return }
         expanded.insert(normalized)
+        invalidateFlattenedCache()
         reloadChildren(of: normalized)
     }
 
@@ -103,6 +114,7 @@ final class FileTreeState {
             expanded.insert(entry.absolutePath)
             reloadChildren(of: entry.absolutePath)
         }
+        invalidateFlattenedCache()
     }
 
     func isExpanded(_ entry: FileTreeEntry) -> Bool {
@@ -122,6 +134,30 @@ final class FileTreeState {
         guard let entries = children[entry.absolutePath] else { return nil }
         guard showOnlyChanges else { return entries }
         return entries.filter { entryHasChanges($0) }
+    }
+
+    func flattenedVisibleEntries() -> [FlattenedEntry] {
+        if let flattenedCache { return flattenedCache }
+        var result: [FlattenedEntry] = []
+        for entry in visibleRootEntries() {
+            appendFlattened(entry, depth: 0, into: &result)
+        }
+        flattenedCache = result
+        return result
+    }
+
+    private func appendFlattened(_ entry: FileTreeEntry, depth: Int, into result: inout [FlattenedEntry]) {
+        result.append(FlattenedEntry(entry: entry, depth: depth))
+        guard entry.isDirectory, expanded.contains(entry.absolutePath),
+              let children = visibleChildren(of: entry)
+        else { return }
+        for child in children {
+            appendFlattened(child, depth: depth + 1, into: &result)
+        }
+    }
+
+    private func invalidateFlattenedCache() {
+        flattenedCache = nil
     }
 
     func entryHasChanges(_ entry: FileTreeEntry) -> Bool {
@@ -217,6 +253,7 @@ final class FileTreeState {
         guard let path = selectedFilePath else { return }
         if let entry = entry(at: path), entry.isDirectory, expanded.contains(path) {
             expanded.remove(path)
+            invalidateFlattenedCache()
             return
         }
         let parent = parentDirectory(of: path)
@@ -269,13 +306,16 @@ final class FileTreeState {
         let components = relative.split(separator: "/").map(String.init)
         guard components.count > 1 else { return }
         var current = normalizedRootPath
+        var didExpand = false
         for component in components.dropLast() {
             current += "/" + component
             if !expanded.contains(current) {
                 expanded.insert(current)
+                didExpand = true
                 reloadChildren(of: current)
             }
         }
+        if didExpand { invalidateFlattenedCache() }
     }
 
     func status(for absolutePath: String) -> FileStatus? {
@@ -297,6 +337,7 @@ final class FileTreeState {
             let entries = await FileTreeService.loadChildren(of: root, repoRoot: root)
             guard !Task.isCancelled, let self else { return }
             rootEntries = entries
+            invalidateFlattenedCache()
         }
     }
 
@@ -308,6 +349,7 @@ final class FileTreeState {
             guard !Task.isCancelled, let self else { return }
             children[directoryPath] = entries
             loadingPaths.remove(directoryPath)
+            invalidateFlattenedCache()
         }
     }
 
@@ -343,6 +385,9 @@ final class FileTreeState {
             guard !Task.isCancelled, let self else { return }
             statuses = result.fileStatuses
             dirHasChange = result.dirtyDirs
+            if showOnlyChanges {
+                invalidateFlattenedCache()
+            }
         }
     }
 

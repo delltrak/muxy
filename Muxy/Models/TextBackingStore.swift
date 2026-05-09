@@ -8,6 +8,9 @@ final class TextBackingStore {
     private(set) var lines: [String] = [""]
     private(set) var lineCharCounts: [Int] = [0]
     private var pendingTrailingFragment = ""
+    private(set) var version: Int = 0
+    private var cachedFullText: String?
+    private var cachedFullTextVersion: Int?
 
     var lineCount: Int { lines.count }
 
@@ -16,6 +19,7 @@ final class TextBackingStore {
         lines = split.map(String.init)
         lineCharCounts = lines.map { ($0 as NSString).length }
         pendingTrailingFragment = ""
+        invalidateFullTextCache()
     }
 
     func appendText(_ chunk: String) {
@@ -46,6 +50,7 @@ final class TextBackingStore {
         } else {
             pendingTrailingFragment = lines.last ?? ""
         }
+        invalidateFullTextCache()
     }
 
     func finishLoading() {
@@ -69,7 +74,13 @@ final class TextBackingStore {
     }
 
     func fullText() -> String {
-        lines.joined(separator: "\n")
+        if let cachedFullText, cachedFullTextVersion == version {
+            return cachedFullText
+        }
+        let text = lines.joined(separator: "\n")
+        cachedFullText = text
+        cachedFullTextVersion = version
+        return text
     }
 
     func replaceLines(in range: Range<Int>, with newLines: [String]) -> [String] {
@@ -77,7 +88,14 @@ final class TextBackingStore {
         let old = Array(lines[clamped])
         lines.replaceSubrange(clamped, with: newLines)
         lineCharCounts.replaceSubrange(clamped, with: newLines.map { ($0 as NSString).length })
+        invalidateFullTextCache()
         return old
+    }
+
+    private func invalidateFullTextCache() {
+        version &+= 1
+        cachedFullText = nil
+        cachedFullTextVersion = nil
     }
 
     struct SearchMatch {

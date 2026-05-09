@@ -38,15 +38,24 @@ struct FileTreeView: View {
                     ZStack(alignment: .top) {
                         emptySpaceTarget
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(state.visibleRootEntries(), id: \.absolutePath) { entry in
-                                FileTreeRowGroup(
-                                    entry: entry,
-                                    depth: 0,
+                            ForEach(state.flattenedVisibleEntries()) { item in
+                                FileTreeRow(
+                                    entry: item.entry,
+                                    depth: item.depth,
                                     state: state,
                                     commands: commands,
                                     onOpenFile: onOpenFile,
                                     requestFocus: requestKeyboardFocus
                                 )
+                                .id(item.entry.absolutePath)
+                                if let pending = state.pendingNewEntry, pending.parentPath == item.entry.absolutePath {
+                                    FileTreeNewEntryRow(
+                                        kind: pending.kind,
+                                        depth: item.depth + 1,
+                                        commands: commands
+                                    )
+                                    .id(pending.token)
+                                }
                             }
                             if let pending = state.pendingNewEntry, pending.parentPath == normalizedRootPath {
                                 FileTreeNewEntryRow(
@@ -264,42 +273,6 @@ struct FileTreeView: View {
     }
 }
 
-private struct FileTreeRowGroup: View {
-    let entry: FileTreeEntry
-    let depth: Int
-    @Bindable var state: FileTreeState
-    let commands: FileTreeCommands
-    let onOpenFile: (String) -> Void
-    let requestFocus: () -> Void
-
-    var body: some View {
-        FileTreeRow(
-            entry: entry,
-            depth: depth,
-            state: state,
-            commands: commands,
-            onOpenFile: onOpenFile,
-            requestFocus: requestFocus
-        )
-        if entry.isDirectory, state.isExpanded(entry), let children = state.visibleChildren(of: entry) {
-            ForEach(children, id: \.absolutePath) { child in
-                FileTreeRowGroup(
-                    entry: child,
-                    depth: depth + 1,
-                    state: state,
-                    commands: commands,
-                    onOpenFile: onOpenFile,
-                    requestFocus: requestFocus
-                )
-            }
-            if let pending = state.pendingNewEntry, pending.parentPath == entry.absolutePath {
-                FileTreeNewEntryRow(kind: pending.kind, depth: depth + 1, commands: commands)
-                    .id(pending.token)
-            }
-        }
-    }
-}
-
 private struct FileTreeRow: View {
     let entry: FileTreeEntry
     let depth: Int
@@ -327,7 +300,6 @@ private struct FileTreeRow: View {
 
     var body: some View {
         HStack(spacing: UIMetrics.spacing2) {
-            Color.clear.frame(width: CGFloat(depth) * UIMetrics.spacing6)
             icon
             if isRenaming {
                 FileTreeRenameField(
@@ -344,7 +316,8 @@ private struct FileTreeRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, UIMetrics.spacing3)
+        .padding(.leading, CGFloat(depth) * UIMetrics.spacing6 + UIMetrics.spacing3)
+        .padding(.trailing, UIMetrics.spacing3)
         .frame(height: UIMetrics.scaled(22))
         .opacity(rowOpacity)
         .background(rowBackground)

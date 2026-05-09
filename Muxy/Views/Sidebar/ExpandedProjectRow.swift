@@ -4,6 +4,8 @@ import SwiftUI
 
 struct ExpandedProjectRow: View {
     let project: Project
+    let metadata: ProjectRowMetadata
+    let worktreeUnreadCounts: [UUID: Int]
     let shortcutIndex: Int?
     let isAnyDragging: Bool
     let onSelect: () -> Void
@@ -200,8 +202,8 @@ struct ExpandedProjectRow: View {
 
     private var projectIcon: some View {
         let logo = resolvedLogo
-        let unread = NotificationStore.shared.unreadCount(for: project.id)
-        let hasCompletion = TerminalProgressStore.shared.hasCompletionPending(for: project.id)
+        let unread = metadata.unreadCount
+        let hasCompletion = metadata.hasCompletionPending
         return ZStack {
             RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
                 .fill(iconBackground(hasLogo: logo != nil))
@@ -236,8 +238,8 @@ struct ExpandedProjectRow: View {
         VStack(spacing: UIMetrics.scaled(1)) {
             ForEach(worktrees) { worktree in
                 ExpandedWorktreeRow(
-                    projectID: project.id,
                     worktree: worktree,
+                    unreadCount: worktreeUnreadCounts[worktree.id] ?? 0,
                     selected: worktree.id == activeWorktreeID,
                     projectActive: isActive,
                     onSelect: {
@@ -273,8 +275,7 @@ struct ExpandedProjectRow: View {
     }
 
     private var resolvedLogo: NSImage? {
-        guard let filename = project.logo else { return nil }
-        return NSImage(contentsOfFile: ProjectLogoStorage.logoPath(for: filename))
+        ProjectLogoCache.shared.image(forFilename: project.logo)
     }
 
     private func iconBackground(hasLogo: Bool) -> AnyShapeStyle {
@@ -421,8 +422,8 @@ struct ExpandedProjectRow: View {
 }
 
 private struct ExpandedWorktreeRow: View {
-    let projectID: UUID
     let worktree: Worktree
+    let unreadCount: Int
     let selected: Bool
     let projectActive: Bool
     let onSelect: () -> Void
@@ -519,11 +520,9 @@ private struct ExpandedWorktreeRow: View {
         return label
     }
 
-    @ViewBuilder
     private var leadingIndicator: some View {
-        let unread = NotificationStore.shared.unreadCount(for: projectID, worktreeID: worktree.id)
         ZStack {
-            if unread > 0 {
+            if unreadCount > 0 {
                 Circle().fill(MuxyTheme.accent).frame(width: UIMetrics.scaled(8), height: UIMetrics.scaled(8))
             } else if selected {
                 Circle().fill(MuxyTheme.accent.opacity(0.4)).frame(width: UIMetrics.scaled(5), height: UIMetrics.scaled(5))

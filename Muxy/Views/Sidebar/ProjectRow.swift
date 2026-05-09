@@ -2,8 +2,14 @@ import AppKit
 import MuxyShared
 import SwiftUI
 
+struct ProjectRowMetadata: Equatable {
+    let unreadCount: Int
+    let hasCompletionPending: Bool
+}
+
 struct ProjectRow: View {
     let project: Project
+    let metadata: ProjectRowMetadata
     let shortcutIndex: Int?
     let isAnyDragging: Bool
     let onSelect: () -> Void
@@ -138,14 +144,13 @@ struct ProjectRow: View {
     }
 
     private var resolvedLogo: NSImage? {
-        guard let filename = project.logo else { return nil }
-        return NSImage(contentsOfFile: ProjectLogoStorage.logoPath(for: filename))
+        ProjectLogoCache.shared.image(forFilename: project.logo)
     }
 
     private var projectIcon: some View {
         let logo = resolvedLogo
-        let unread = NotificationStore.shared.unreadCount(for: project.id)
-        let hasCompletion = TerminalProgressStore.shared.hasCompletionPending(for: project.id)
+        let unread = metadata.unreadCount
+        let hasCompletion = metadata.hasCompletionPending
         return ZStack {
             RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
                 .fill(iconBackground(hasLogo: logo != nil))
