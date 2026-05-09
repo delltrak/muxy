@@ -196,6 +196,7 @@ final class GhosttyTerminalNSView: NSView {
         delayedResizeWorkItem?.cancel()
         delayedResizeWorkItem = nil
         destroySurface()
+        GhosttyRuntimeEventAdapter.clearCache(for: self)
         removeFromSuperview()
     }
 
