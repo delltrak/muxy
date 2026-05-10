@@ -221,10 +221,12 @@ struct LogoCropperSheet: View {
             return
         }
 
+        let trimmed = LogoCropperSheet.trimmedToContent(cropped) ?? cropped
+
         let finalSize = NSSize(width: outputSize, height: outputSize)
         let result = NSImage(size: finalSize, flipped: false) { drawRect in
             NSGraphicsContext.current?.imageInterpolation = .high
-            NSImage(cgImage: cropped, size: .zero).draw(
+            NSImage(cgImage: trimmed, size: .zero).draw(
                 in: drawRect,
                 from: .zero,
                 operation: .copy,
@@ -234,6 +236,52 @@ struct LogoCropperSheet: View {
         }
 
         onConfirm(result)
+    }
+
+    private static func trimmedToContent(_ cgImage: CGImage) -> CGImage? {
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+
+        let bytesPerPixel = 4
+        let bytesPerRow = width * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+        else { return nil }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        let alphaThreshold: UInt8 = 16
+        var minX = width
+        var minY = height
+        var maxX = -1
+        var maxY = -1
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let alpha = pixels[(y * width + x) * bytesPerPixel + 3]
+                guard alpha > alphaThreshold else { continue }
+                if x < minX { minX = x }
+                if y < minY { minY = y }
+                if x > maxX { maxX = x }
+                if y > maxY { maxY = y }
+            }
+        }
+
+        guard maxX >= minX, maxY >= minY else { return nil }
+        let trimmedWidth = maxX - minX + 1
+        let trimmedHeight = maxY - minY + 1
+        guard trimmedWidth < width || trimmedHeight < height else { return nil }
+        let cropRect = CGRect(x: minX, y: minY, width: trimmedWidth, height: trimmedHeight)
+        return cgImage.cropping(to: cropRect)
     }
 }
 

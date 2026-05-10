@@ -65,11 +65,11 @@ struct TabAreaView: View {
                     },
                     onSetCustomTitle: { tabID, title in
                         area.setCustomTitle(tabID, title: title)
-                        appState.scheduleSaveWorkspaces()
+                        appState.scheduleSaveWorktreeLayouts()
                     },
                     onSetColorID: { tabID, colorID in
                         area.setColorID(tabID, colorID: colorID)
-                        appState.scheduleSaveWorkspaces()
+                        appState.scheduleSaveWorktreeLayouts()
                     },
                     onReorderTab: { fromOffsets, toOffset in
                         area.reorderTab(fromOffsets: fromOffsets, toOffset: toOffset)

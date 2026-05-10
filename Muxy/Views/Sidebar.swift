@@ -1,3 +1,4 @@
+import MuxyShared
 import SwiftUI
 
 @MainActor
@@ -30,9 +31,14 @@ struct Sidebar: View {
     @Environment(AppState.self) private var appState
     @Environment(ProjectStore.self) private var projectStore
     @Environment(WorktreeStore.self) private var worktreeStore
+    @Environment(WorkspaceStore.self) private var workspaceStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dragState = ProjectDragState()
     @State private var expanded = UserDefaults.standard.bool(forKey: "muxy.sidebarExpanded")
+    @State private var sectionCollapsed: [UUID: Bool] = SidebarSectionStore.load()
+    @State private var showNewWorkspaceSheet = false
+    @State private var renameWorkspaceTarget: Workspace?
+    @State private var pendingDeleteWorkspaceID: UUID?
     @AppStorage(SidebarCollapsedStyle.storageKey) private var collapsedStyleRaw = SidebarCollapsedStyle.defaultValue.rawValue
     @AppStorage(SidebarExpandedStyle.storageKey) private var expandedStyleRaw = SidebarExpandedStyle.defaultValue.rawValue
     @ScaledMetric(relativeTo: .body) private var collapsedWidth: CGFloat = 44
@@ -60,6 +66,12 @@ struct Sidebar: View {
                 .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)
                 .clipped()
 
+            if isWide {
+                newWorkspaceRow
+                    .padding(.horizontal, UIMetrics.spacing3)
+                    .padding(.bottom, UIMetrics.spacing2)
+            }
+
             SidebarFooter(expanded: isWide)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -71,6 +83,60 @@ struct Sidebar: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
             toggleExpanded()
         }
+        .sheet(isPresented: $showNewWorkspaceSheet) {
+            WorkspaceEditorSheet(mode: .create) { result in
+                createWorkspace(from: result)
+            }
+        }
+        .sheet(item: $renameWorkspaceTarget) { workspace in
+            WorkspaceEditorSheet(mode: .rename(current: workspace)) { result in
+                workspaceStore.rename(id: workspace.id, to: result.name)
+                workspaceStore.setIconColor(id: workspace.id, to: result.iconColor)
+            }
+        }
+        .alert(
+            "Delete this workspace?",
+            isPresented: deleteAlertBinding,
+            presenting: pendingDeleteWorkspaceID
+        ) { id in
+            Button("Cancel", role: .cancel) { pendingDeleteWorkspaceID = nil }
+            Button("Delete", role: .destructive) { deleteWorkspace(id: id) }
+        } message: { _ in
+            Text("All projects in this workspace will be removed from Muxy. The folders on disk are not deleted.")
+        }
+    }
+
+    private var deleteAlertBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteWorkspaceID != nil },
+            set: { if !$0 { pendingDeleteWorkspaceID = nil } }
+        )
+    }
+
+    private var newWorkspaceRow: some View {
+        Button {
+            showNewWorkspaceSheet = true
+        } label: {
+            HStack(spacing: UIMetrics.spacing4) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
+                        .strokeBorder(MuxyTheme.fgMuted.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    Image(systemName: "plus")
+                        .font(.system(size: UIMetrics.fontEmphasis, weight: .bold))
+                        .foregroundStyle(MuxyTheme.fgMuted)
+                }
+                .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
+
+                Text("New Workspace")
+                    .font(.system(size: UIMetrics.fontBody, weight: .medium))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+                Spacer()
+            }
+            .padding(UIMetrics.spacing2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("New Workspace")
     }
 
     private func toggleExpanded() {
@@ -80,71 +146,53 @@ struct Sidebar: View {
         UserDefaults.standard.set(expanded, forKey: "muxy.sidebarExpanded")
     }
 
-    private var addButton: some View {
-        AddProjectButton(expanded: isWide) {
-            ProjectOpenService.openProject(
-                appState: appState,
-                projectStore: projectStore,
-                worktreeStore: worktreeStore
-            )
+    private func projects(in workspace: Workspace) -> [Project] {
+        projectStore.projects.filter { $0.workspaceID == workspace.id }
+    }
+
+    private func isCollapsed(_ workspace: Workspace) -> Bool {
+        if let stored = sectionCollapsed[workspace.id] { return stored }
+        return workspace.id != appState.activeWorkspaceID
+    }
+
+    private func toggleSection(_ workspace: Workspace) {
+        let current = isCollapsed(workspace)
+        var copy = sectionCollapsed
+        copy[workspace.id] = !current
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+            sectionCollapsed = copy
         }
-        .help(shortcutTooltip("Add Project", for: .openProject))
+        SidebarSectionStore.save(copy)
+    }
+
+    private func activeWorkspaceShortcutIndex(_ project: Project) -> Int? {
+        guard project.workspaceID == appState.activeWorkspaceID else { return nil }
+        let activeProjects = projectStore.projects.filter {
+            $0.workspaceID == appState.activeWorkspaceID
+        }
+        guard let idx = activeProjects.firstIndex(where: { $0.id == project.id }), idx < 9 else { return nil }
+        return idx + 1
     }
 
     private var projectList: some View {
         let notificationStore = NotificationStore.shared
         let progressStore = TerminalProgressStore.shared
         return ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(spacing: UIMetrics.spacing2) {
-                ForEach(Array(projectStore.projects.enumerated()), id: \.element.id) { index, project in
-                    let metadata = ProjectRowMetadata(
-                        unreadCount: notificationStore.unreadCount(for: project.id),
-                        hasCompletionPending: progressStore.hasCompletionPending(for: project.id)
+            LazyVStack(alignment: .leading, spacing: UIMetrics.spacing2) {
+                if isWide {
+                    ForEach(workspaceStore.workspaces) { workspace in
+                        workspaceSection(
+                            workspace,
+                            notificationStore: notificationStore,
+                            progressStore: progressStore
+                        )
+                    }
+                } else {
+                    flatProjectList(
+                        notificationStore: notificationStore,
+                        progressStore: progressStore
                     )
-                    Group {
-                        if isWide {
-                            ExpandedProjectRow(
-                                project: project,
-                                metadata: metadata,
-                                worktreeUnreadCounts: worktreeUnreadCounts(
-                                    for: project.id,
-                                    notificationStore: notificationStore
-                                ),
-                                shortcutIndex: index < 9 ? index + 1 : nil,
-                                isAnyDragging: dragState.draggedID != nil,
-                                onSelect: { select(project) },
-                                onRemove: { remove(project) },
-                                onRename: { projectStore.rename(id: project.id, to: $0) },
-                                onSetLogo: { projectStore.setLogo(id: project.id, to: $0) },
-                                onSetIconColor: { projectStore.setIconColor(id: project.id, to: $0) }
-                            )
-                        } else {
-                            ProjectRow(
-                                project: project,
-                                metadata: metadata,
-                                shortcutIndex: index < 9 ? index + 1 : nil,
-                                isAnyDragging: dragState.draggedID != nil,
-                                onSelect: { select(project) },
-                                onRemove: { remove(project) },
-                                onRename: { projectStore.rename(id: project.id, to: $0) },
-                                onSetLogo: { projectStore.setLogo(id: project.id, to: $0) },
-                                onSetIconColor: { projectStore.setIconColor(id: project.id, to: $0) }
-                            )
-                        }
-                    }
-                    .background {
-                        if dragState.draggedID != nil {
-                            GeometryReader { geo in
-                                Color.clear.preference(
-                                    key: UUIDFramePreferenceKey<SidebarFrameTag>.self,
-                                    value: [project.id: geo.frame(in: .named("sidebar"))]
-                                )
-                            }
-                        }
-                    }
-                    .gesture(projectDragGesture(for: project))
                 }
-                addButton
             }
             .padding(.horizontal, isWide ? UIMetrics.spacing3 : UIMetrics.spacing4)
             .padding(.vertical, UIMetrics.spacing2)
@@ -154,6 +202,151 @@ struct Sidebar: View {
             }
         }
         .coordinateSpace(name: "sidebar")
+    }
+
+    @ViewBuilder
+    private func workspaceSection(
+        _ workspace: Workspace,
+        notificationStore: NotificationStore,
+        progressStore: TerminalProgressStore
+    ) -> some View {
+        let collapsed = isCollapsed(workspace)
+        let projectsInWorkspace = projects(in: workspace)
+        let isActiveWorkspace = workspace.id == appState.activeWorkspaceID
+
+        WorkspaceSectionHeader(
+            workspace: workspace,
+            isActive: isActiveWorkspace,
+            isCollapsed: collapsed,
+            projectCount: projectsInWorkspace.count,
+            onToggle: { toggleSection(workspace) },
+            onAddProject: { addProject(to: workspace.id) },
+            onRename: { renameWorkspaceTarget = workspace },
+            onDelete: {
+                guard workspaceStore.workspaces.count > 1 else { return }
+                pendingDeleteWorkspaceID = workspace.id
+            },
+            canDelete: workspaceStore.workspaces.count > 1
+        )
+
+        if !collapsed {
+            ForEach(projectsInWorkspace) { project in
+                let metadata = ProjectRowMetadata(
+                    unreadCount: notificationStore.unreadCount(for: project.id),
+                    hasCompletionPending: progressStore.hasCompletionPending(for: project.id)
+                )
+                ExpandedProjectRow(
+                    project: project,
+                    metadata: metadata,
+                    worktreeUnreadCounts: worktreeUnreadCounts(
+                        for: project.id,
+                        notificationStore: notificationStore
+                    ),
+                    shortcutIndex: activeWorkspaceShortcutIndex(project),
+                    isAnyDragging: dragState.draggedID != nil,
+                    onSelect: { select(project) },
+                    onRemove: { remove(project) },
+                    onRename: { projectStore.rename(id: project.id, to: $0) },
+                    onSetLogo: { projectStore.setLogo(id: project.id, to: $0) },
+                    onSetIconColor: { projectStore.setIconColor(id: project.id, to: $0) }
+                )
+                .padding(.leading, UIMetrics.spacing4)
+                .background {
+                    if dragState.draggedID != nil {
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: UUIDFramePreferenceKey<SidebarFrameTag>.self,
+                                value: [project.id: geo.frame(in: .named("sidebar"))]
+                            )
+                        }
+                    }
+                }
+                .gesture(projectDragGesture(for: project))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func flatProjectList(
+        notificationStore: NotificationStore,
+        progressStore: TerminalProgressStore
+    ) -> some View {
+        ForEach(projectStore.projects) { project in
+            let metadata = ProjectRowMetadata(
+                unreadCount: notificationStore.unreadCount(for: project.id),
+                hasCompletionPending: progressStore.hasCompletionPending(for: project.id)
+            )
+            ProjectRow(
+                project: project,
+                metadata: metadata,
+                shortcutIndex: activeWorkspaceShortcutIndex(project),
+                isAnyDragging: dragState.draggedID != nil,
+                onSelect: { select(project) },
+                onRemove: { remove(project) },
+                onRename: { projectStore.rename(id: project.id, to: $0) },
+                onSetLogo: { projectStore.setLogo(id: project.id, to: $0) },
+                onSetIconColor: { projectStore.setIconColor(id: project.id, to: $0) }
+            )
+            .background {
+                if dragState.draggedID != nil {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: UUIDFramePreferenceKey<SidebarFrameTag>.self,
+                            value: [project.id: geo.frame(in: .named("sidebar"))]
+                        )
+                    }
+                }
+            }
+            .gesture(projectDragGesture(for: project))
+        }
+        AddProjectButton(expanded: false) {
+            ProjectOpenService.openProject(
+                appState: appState,
+                projectStore: projectStore,
+                worktreeStore: worktreeStore
+            )
+        }
+        .help(shortcutTooltip("Add Project", for: .openProject))
+    }
+
+    private func addProject(to workspaceID: UUID) {
+        ProjectOpenService.openProject(
+            appState: appState,
+            projectStore: projectStore,
+            worktreeStore: worktreeStore,
+            workspaceID: workspaceID
+        )
+    }
+
+    private func createWorkspace(from result: WorkspaceEditorSheet.Result) {
+        let trimmed = result.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let workspace = Workspace(
+            name: trimmed,
+            sortOrder: workspaceStore.workspaces.count,
+            iconColor: result.iconColor
+        )
+        workspaceStore.add(workspace)
+        appState.selectWorkspace(workspace.id, projects: projectStore.projects)
+        sectionCollapsed[workspace.id] = false
+        SidebarSectionStore.save(sectionCollapsed)
+    }
+
+    private func deleteWorkspace(id: UUID) {
+        defer { pendingDeleteWorkspaceID = nil }
+        guard workspaceStore.workspaces.count > 1 else { return }
+        let projectsInWorkspace = projectStore.projects.filter { $0.workspaceID == id }
+        for project in projectsInWorkspace {
+            appState.removeProject(project.id)
+            projectStore.remove(id: project.id)
+            worktreeStore.removeProject(project.id)
+        }
+        workspaceStore.remove(id: id)
+        sectionCollapsed.removeValue(forKey: id)
+        SidebarSectionStore.save(sectionCollapsed)
+        if appState.activeWorkspaceID == id, let next = workspaceStore.workspaces.first {
+            appState.selectWorkspace(next.id, projects: projectStore.projects)
+        }
     }
 
     private func shortcutTooltip(_ name: String, for action: ShortcutAction) -> String {
@@ -196,6 +389,11 @@ struct Sidebar: View {
             matching: appState.activeWorktreeID[project.id]
         )
         else { return }
+        if let workspaceID = project.workspaceID,
+           appState.activeWorkspaceID != workspaceID
+        {
+            appState.activeWorkspaceID = workspaceID
+        }
         appState.selectProject(project, worktree: worktree)
     }
 
@@ -223,6 +421,10 @@ struct Sidebar: View {
                   let destIndex = projectStore.projects.firstIndex(where: { $0.id == id })
             else { return }
 
+            let sourceWorkspaceID = projectStore.projects[sourceIndex].workspaceID
+            let destWorkspaceID = projectStore.projects[destIndex].workspaceID
+            guard sourceWorkspaceID == destWorkspaceID else { return }
+
             dragState.lastReorderTargetID = id
             let offset = destIndex > sourceIndex ? destIndex + 1 : destIndex
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
@@ -243,6 +445,113 @@ private struct ProjectDragState {
     var draggedID: UUID?
     var frames: [UUID: CGRect] = [:]
     var lastReorderTargetID: UUID?
+}
+
+private enum SidebarSectionStore {
+    private static let key = "muxy.sidebarSectionCollapsed"
+
+    static func load() -> [UUID: Bool] {
+        guard let raw = UserDefaults.standard.dictionary(forKey: key) as? [String: Bool] else {
+            return [:]
+        }
+        var result: [UUID: Bool] = [:]
+        for (idString, collapsed) in raw {
+            guard let id = UUID(uuidString: idString) else { continue }
+            result[id] = collapsed
+        }
+        return result
+    }
+
+    static func save(_ value: [UUID: Bool]) {
+        let encoded = Dictionary(uniqueKeysWithValues: value.map { ($0.key.uuidString, $0.value) })
+        UserDefaults.standard.set(encoded, forKey: key)
+    }
+}
+
+private struct WorkspaceSectionHeader: View {
+    let workspace: Workspace
+    let isActive: Bool
+    let isCollapsed: Bool
+    let projectCount: Int
+    let onToggle: () -> Void
+    let onAddProject: () -> Void
+    let onRename: () -> Void
+    let onDelete: () -> Void
+    let canDelete: Bool
+    @State private var hovered = false
+
+    private var accentColor: Color {
+        ProjectIconColor.color(for: workspace.iconColor) ?? MuxyTheme.fgMuted
+    }
+
+    private var workspaceMark: some View {
+        Circle()
+            .fill(accentColor)
+            .frame(width: 8, height: 8)
+    }
+
+    var body: some View {
+        HStack(spacing: UIMetrics.spacing2) {
+            Button(action: onToggle) {
+                HStack(spacing: UIMetrics.spacing2) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
+                        .foregroundStyle(MuxyTheme.fgMuted)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                    workspaceMark
+                    Text(workspace.name.uppercased())
+                        .font(.system(size: UIMetrics.fontCaption, weight: .semibold))
+                        .foregroundStyle(isActive ? MuxyTheme.fg : MuxyTheme.fgMuted)
+                        .lineLimit(1)
+                    if projectCount > 0, isCollapsed {
+                        Text("\(projectCount)")
+                            .font(.system(size: UIMetrics.fontMicro, weight: .semibold))
+                            .foregroundStyle(MuxyTheme.fgMuted)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(MuxyTheme.surface, in: Capsule())
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+
+            Button(action: onAddProject) {
+                Image(systemName: "plus")
+                    .font(.system(size: UIMetrics.fontCaption, weight: .bold))
+                    .foregroundStyle(MuxyTheme.fgMuted)
+                    .frame(width: UIMetrics.controlMedium, height: UIMetrics.controlMedium)
+                    .background(MuxyTheme.hover, in: RoundedRectangle(cornerRadius: UIMetrics.radiusSM))
+            }
+            .buttonStyle(.plain)
+            .opacity(hovered || isActive ? 1 : 0)
+            .allowsHitTesting(hovered || isActive)
+            .help("Add Project to \(workspace.name)")
+            .accessibilityLabel("Add Project to \(workspace.name)")
+        }
+        .padding(.vertical, UIMetrics.spacing1)
+        .padding(.horizontal, UIMetrics.spacing2)
+        .background(
+            RoundedRectangle(cornerRadius: UIMetrics.radiusSM)
+                .fill(isActive ? accentColor.opacity(0.08) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { hovered = $0 }
+        .contextMenu {
+            Button(action: onRename) {
+                Label("Rename Workspace…", systemImage: "pencil")
+            }
+            Button(action: onAddProject) {
+                Label("Add Project to \(workspace.name)…", systemImage: "plus")
+            }
+            Divider()
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Workspace…", systemImage: "trash")
+            }
+            .disabled(!canDelete)
+        }
+    }
 }
 
 private struct SidebarFooterContainer<Content: View>: View {
@@ -279,7 +588,7 @@ private struct AddProjectButton: View {
 
     private var collapsedLayout: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
+            Circle()
                 .fill(MuxyTheme.hover)
             Image(systemName: "plus")
                 .font(.system(size: UIMetrics.fontEmphasis, weight: .bold))
@@ -292,7 +601,7 @@ private struct AddProjectButton: View {
     private var expandedLayout: some View {
         HStack(spacing: UIMetrics.spacing4) {
             ZStack {
-                RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
+                Circle()
                     .fill(MuxyTheme.surface)
                 Image(systemName: "plus")
                     .font(.system(size: UIMetrics.fontEmphasis, weight: .bold))
@@ -317,8 +626,6 @@ struct SidebarFooter: View {
     @AppStorage(AIUsageSettingsStore.usageDisplayModeKey) private var usageDisplayModeRaw = AIUsageSettingsStore.defaultUsageDisplayMode
         .rawValue
     @AppStorage(AIUsageSettingsStore.sidebarPreviewProviderIDKey) private var pinnedPreviewProviderID: String = ""
-    @State private var showThemePicker = false
-    @State private var showNotifications = false
     @State private var showAIUsagePopover = false
     private let usageService = AIUsageService.shared
 
@@ -328,9 +635,13 @@ struct SidebarFooter: View {
 
     private let usageRefreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    private var notificationStore: NotificationStore { NotificationStore.shared }
-
     var body: some View {
+        if usageEnabled {
+            footerBody
+        }
+    }
+
+    private var footerBody: some View {
         VStack(spacing: 0) {
             if expanded {
                 expandedFooter
@@ -346,12 +657,6 @@ struct SidebarFooter: View {
                 await usageService.refreshIfNeeded()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleThemePicker)) { _ in
-            showThemePicker.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationPanel)) { _ in
-            showNotifications.toggle()
-        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleAIUsage)) { _ in
             guard usageEnabled else { return }
             showAIUsagePopover.toggle()
@@ -361,22 +666,6 @@ struct SidebarFooter: View {
                 showAIUsagePopover = false
             }
         }
-    }
-
-    private func postToggleSidebar() {
-        NotificationCenter.default.post(name: .toggleSidebar, object: nil)
-    }
-
-    private var sidebarToggleLabel: String {
-        expanded ? "Collapse Sidebar" : "Expand Sidebar"
-    }
-
-    private var sidebarToggleIcon: String {
-        "sidebar.left"
-    }
-
-    private var notificationBellIcon: String {
-        notificationStore.unreadCount > 0 ? "bell.badge" : "bell"
     }
 
     private var previewProviderDisplay: (percent: Int, iconName: String)? {
@@ -426,14 +715,6 @@ struct SidebarFooter: View {
                 if usageEnabled {
                     aiUsageButton
                 }
-                IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                    .help("Notifications")
-                    .popover(isPresented: $showNotifications) {
-                        NotificationPanel(onDismiss: { showNotifications = false })
-                    }
-                IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                    .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                    .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
             }
         }
         .padding(.bottom, UIMetrics.spacing4)
@@ -442,19 +723,10 @@ struct SidebarFooter: View {
     private var expandedFooter: some View {
         SidebarFooterContainer {
             HStack(spacing: UIMetrics.spacing2) {
-                Spacer()
-
                 if usageEnabled {
                     aiUsageButton
                 }
-                IconButton(symbol: notificationBellIcon, accessibilityLabel: "Notifications") { showNotifications.toggle() }
-                    .help("Notifications")
-                    .popover(isPresented: $showNotifications) {
-                        NotificationPanel(onDismiss: { showNotifications = false })
-                    }
-                IconButton(symbol: "paintpalette", accessibilityLabel: "Theme Picker") { showThemePicker.toggle() }
-                    .help("Theme Picker (\(KeyBindingStore.shared.combo(for: .toggleThemePicker).displayString))")
-                    .popover(isPresented: $showThemePicker) { ThemePicker(mode: .sidebar) }
+                Spacer()
             }
         }
         .padding(.horizontal, UIMetrics.spacing5)

@@ -6,6 +6,8 @@ protocol ActiveProjectSelectionStoring {
     func saveActiveProjectID(_ id: UUID?)
     func loadActiveWorktreeIDs() -> [UUID: UUID]
     func saveActiveWorktreeIDs(_ ids: [UUID: UUID])
+    func loadActiveWorkspaceID() -> UUID?
+    func saveActiveWorkspaceID(_ id: UUID?)
 }
 
 @MainActor
@@ -13,15 +15,18 @@ final class UserDefaultsActiveProjectSelectionStore: ActiveProjectSelectionStori
     private let defaults: UserDefaults
     private let projectKey: String
     private let worktreesKey: String
+    private let workspaceKey: String
 
     init(
         defaults: UserDefaults = .standard,
         projectKey: String = "muxy.activeProjectID",
-        worktreesKey: String = "muxy.activeWorktreeIDs"
+        worktreesKey: String = "muxy.activeWorktreeIDs",
+        workspaceKey: String = "muxy.activeWorkspaceID"
     ) {
         self.defaults = defaults
         self.projectKey = projectKey
         self.worktreesKey = worktreesKey
+        self.workspaceKey = workspaceKey
     }
 
     func loadActiveProjectID() -> UUID? {
@@ -48,6 +53,15 @@ final class UserDefaultsActiveProjectSelectionStore: ActiveProjectSelectionStori
     func saveActiveWorktreeIDs(_ ids: [UUID: UUID]) {
         let encoded = Dictionary(uniqueKeysWithValues: ids.map { ($0.key.uuidString, $0.value.uuidString) })
         defaults.set(encoded, forKey: worktreesKey)
+    }
+
+    func loadActiveWorkspaceID() -> UUID? {
+        guard let idString = defaults.string(forKey: workspaceKey) else { return nil }
+        return UUID(uuidString: idString)
+    }
+
+    func saveActiveWorkspaceID(_ id: UUID?) {
+        defaults.set(id?.uuidString, forKey: workspaceKey)
     }
 }
 

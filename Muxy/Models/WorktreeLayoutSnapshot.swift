@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkspaceSnapshot: Codable {
+struct WorktreeLayoutSnapshot: Codable {
     let projectID: UUID
     let worktreeID: UUID?
     let worktreePath: String?
@@ -158,9 +158,9 @@ struct RestoredWorkspace {
 }
 
 @MainActor
-enum WorkspaceRestorer {
+enum WorktreeLayoutRestorer {
     static func restoreAll(
-        from snapshots: [WorkspaceSnapshot],
+        from snapshots: [WorktreeLayoutSnapshot],
         projects: [Project],
         worktrees: [UUID: [Worktree]]
     ) -> [RestoredWorkspace] {
@@ -184,7 +184,7 @@ enum WorkspaceRestorer {
         return results
     }
 
-    private static func resolveWorktree(for snapshot: WorkspaceSnapshot, in worktrees: [Worktree]) -> Worktree? {
+    private static func resolveWorktree(for snapshot: WorktreeLayoutSnapshot, in worktrees: [Worktree]) -> Worktree? {
         if let worktreeID = snapshot.worktreeID,
            let match = worktrees.first(where: { $0.id == worktreeID })
         {
@@ -201,14 +201,14 @@ enum WorkspaceRestorer {
     static func snapshotAll(
         workspaceRoots: [WorktreeKey: SplitNode],
         focusedAreaID: [WorktreeKey: UUID]
-    ) -> [WorkspaceSnapshot] {
-        var snapshots: [WorkspaceSnapshot] = []
+    ) -> [WorktreeLayoutSnapshot] {
+        var snapshots: [WorktreeLayoutSnapshot] = []
         for (key, root) in workspaceRoots {
             let path: String? = {
                 if case let .tabArea(area) = root { return area.projectPath }
                 return root.allAreas().first?.projectPath
             }()
-            snapshots.append(WorkspaceSnapshot(
+            snapshots.append(WorktreeLayoutSnapshot(
                 projectID: key.projectID,
                 worktreeID: key.worktreeID,
                 worktreePath: path,

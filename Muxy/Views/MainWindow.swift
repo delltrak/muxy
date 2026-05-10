@@ -89,6 +89,8 @@ struct MainWindow: View {
                         }
                 }
                 topBarContent
+                TopBarPersistentControls()
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .frame(height: UIMetrics.scaled(32))
             .background(WindowDragRepresentable())
@@ -395,11 +397,11 @@ struct MainWindow: View {
                 },
                 onSetCustomTitle: { tabID, title in
                     area.setCustomTitle(tabID, title: title)
-                    appState.scheduleSaveWorkspaces()
+                    appState.scheduleSaveWorktreeLayouts()
                 },
                 onSetColorID: { tabID, colorID in
                     area.setColorID(tabID, colorID: colorID)
-                    appState.scheduleSaveWorkspaces()
+                    appState.scheduleSaveWorktreeLayouts()
                 },
                 onReorderTab: { fromOffsets, toOffset in
                     area.reorderTab(fromOffsets: fromOffsets, toOffset: toOffset)

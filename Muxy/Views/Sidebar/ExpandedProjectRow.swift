@@ -206,7 +206,7 @@ struct ExpandedProjectRow: View {
         let unread = metadata.unreadCount
         let hasCompletion = metadata.hasCompletionPending
         return ZStack {
-            RoundedRectangle(cornerRadius: UIMetrics.radiusMD)
+            Circle()
                 .fill(iconBackground(hasLogo: logo != nil))
 
             if let logo {
@@ -214,7 +214,6 @@ struct ExpandedProjectRow: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
-                    .clipShape(RoundedRectangle(cornerRadius: UIMetrics.radiusMD))
             } else {
                 Text(displayLetter)
                     .font(.system(size: UIMetrics.fontEmphasis, weight: .bold))
@@ -222,6 +221,7 @@ struct ExpandedProjectRow: View {
             }
         }
         .frame(width: UIMetrics.iconXXL, height: UIMetrics.iconXXL)
+        .clipShape(Circle())
         .overlay(alignment: .topTrailing) {
             if unread > 0 {
                 NotificationBadge(count: unread)
@@ -280,7 +280,7 @@ struct ExpandedProjectRow: View {
     }
 
     private func iconBackground(hasLogo: Bool) -> AnyShapeStyle {
-        if hasLogo { return AnyShapeStyle(Color.clear) }
+        if hasLogo { return AnyShapeStyle(MuxyTheme.surface) }
         if let tint = ProjectIconColor.color(for: project.iconColor) {
             return AnyShapeStyle(hovered ? tint.opacity(0.85) : tint)
         }

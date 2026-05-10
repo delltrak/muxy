@@ -60,10 +60,12 @@ final class AppState {
 
     private let selectionStore: any ActiveProjectSelectionStoring
     private let terminalViews: any TerminalViewRemoving
-    private let workspacePersistence: any WorkspacePersisting
+    private let worktreeLayoutPersistence: any WorktreeLayoutPersisting
     var onProjectsEmptied: (([UUID]) -> Void)?
 
     var activeProjectID: UUID?
+
+    var activeWorkspaceID: UUID?
 
     var activeWorktreeID: [UUID: UUID] = [:]
 
@@ -94,22 +96,22 @@ final class AppState {
     init(
         selectionStore: any ActiveProjectSelectionStoring,
         terminalViews: any TerminalViewRemoving,
-        workspacePersistence: any WorkspacePersisting
+        worktreeLayoutPersistence: any WorktreeLayoutPersisting
     ) {
         self.selectionStore = selectionStore
         self.terminalViews = terminalViews
-        self.workspacePersistence = workspacePersistence
+        self.worktreeLayoutPersistence = worktreeLayoutPersistence
     }
 
     func restoreSelection(projects: [Project], worktrees: [UUID: [Worktree]]) {
-        let snapshots: [WorkspaceSnapshot]
+        let snapshots: [WorktreeLayoutSnapshot]
         do {
-            snapshots = try workspacePersistence.loadWorkspaces()
+            snapshots = try worktreeLayoutPersistence.loadWorktreeLayouts()
         } catch {
             logger.error("Failed to load workspaces: \(error)")
             snapshots = []
         }
-        let restored = WorkspaceRestorer.restoreAll(
+        let restored = WorktreeLayoutRestorer.restoreAll(
             from: snapshots,
             projects: projects,
             worktrees: worktrees
@@ -132,24 +134,31 @@ final class AppState {
             activeWorktreeID[project.id] = restoredKeysForProject[0].worktreeID
         }
 
+        if let workspaceID = selectionStore.loadActiveWorkspaceID() {
+            activeWorkspaceID = workspaceID
+        }
+
         guard let id = selectionStore.loadActiveProjectID(),
-              projects.contains(where: { $0.id == id }),
+              let project = projects.first(where: { $0.id == id }),
               activeWorktreeID[id] != nil
         else { return }
         activeProjectID = id
+        if let projectWorkspace = project.workspaceID {
+            activeWorkspaceID = projectWorkspace
+        }
         recordCurrentNavigationEntry()
     }
 
-    func saveWorkspaces() {
+    func saveWorktreeLayouts() {
         pendingSaveWork?.cancel()
         pendingSaveWork = nil
-        performWorkspaceSave()
+        performWorktreeLayoutSave()
     }
 
-    func scheduleSaveWorkspaces() {
+    func scheduleSaveWorktreeLayouts() {
         pendingSaveWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            self?.performWorkspaceSave()
+            self?.performWorktreeLayoutSave()
         }
         pendingSaveWork = work
         DispatchQueue.main.asyncAfter(
@@ -162,16 +171,16 @@ final class AppState {
         guard let work = pendingSaveWork else { return }
         work.cancel()
         pendingSaveWork = nil
-        performWorkspaceSave()
+        performWorktreeLayoutSave()
     }
 
-    private func performWorkspaceSave() {
-        let snapshots = WorkspaceRestorer.snapshotAll(
+    private func performWorktreeLayoutSave() {
+        let snapshots = WorktreeLayoutRestorer.snapshotAll(
             workspaceRoots: workspaceRoots,
             focusedAreaID: focusedAreaID
         )
         do {
-            try workspacePersistence.saveWorkspaces(snapshots)
+            try worktreeLayoutPersistence.saveWorktreeLayouts(snapshots)
         } catch {
             logger.error("Failed to save workspaces: \(error)")
         }
@@ -180,6 +189,23 @@ final class AppState {
     private func saveSelection() {
         selectionStore.saveActiveProjectID(activeProjectID)
         selectionStore.saveActiveWorktreeIDs(activeWorktreeID)
+        selectionStore.saveActiveWorkspaceID(activeWorkspaceID)
+    }
+
+    func selectWorkspace(_ workspaceID: UUID, projects: [Project]) {
+        guard activeWorkspaceID != workspaceID else { return }
+        activeWorkspaceID = workspaceID
+        let belongsToWorkspace = projects.contains {
+            $0.id == activeProjectID && $0.workspaceID == workspaceID
+        }
+        if !belongsToWorkspace {
+            let firstInWorkspace = projects
+                .filter { $0.workspaceID == workspaceID }
+                .min { $0.sortOrder < $1.sortOrder }
+            activeProjectID = firstInWorkspace?.id
+            recordCurrentNavigationEntry()
+        }
+        saveSelection()
     }
 
     func activeWorktreeKey(for projectID: UUID) -> WorktreeKey? {
@@ -603,7 +629,7 @@ final class AppState {
               let tabID = area.activeTabID
         else { return }
         area.togglePin(tabID)
-        scheduleSaveWorkspaces()
+        scheduleSaveWorktreeLayouts()
     }
 
     func dispatch(_ action: Action) {
@@ -682,7 +708,7 @@ final class AppState {
             TerminalProgressStore.shared.clearCompletion(for: activePaneID)
         }
 
-        scheduleSaveWorkspaces()
+        scheduleSaveWorktreeLayouts()
         saveSelection()
     }
 
